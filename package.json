@@ -2,6 +2,21 @@
   "name": "@tjdals12/orc",
   "version": "0.0.0-development",
   "description": "Run YAML-defined AI coding workflows against registered projects, each run in its own git worktree",
+  "keywords": [
+    "ai",
+    "ai-agents",
+    "llm",
+    "claude",
+    "claude-code",
+    "codex",
+    "coding-agent",
+    "cli",
+    "workflow",
+    "workflow-engine",
+    "automation",
+    "yaml",
+    "git-worktree"
+  ],
   "type": "module",
   "license": "MIT",
   "repository": {
