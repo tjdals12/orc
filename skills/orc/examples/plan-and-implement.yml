@@ -1,0 +1,48 @@
+# An input, an artifact chain between the nodes, and a bash node that verifies
+# the result.
+#
+# plan.md is short, so the second node inlines it with $ARTIFACT(...). The code
+# itself is not an artifact: it stays in the run's worktree.
+version: 1
+id: plan-and-implement
+description: Plan a change, implement it, and verify the result
+input:
+  required: true
+  description: What to build, or a summary of the conversation that decided it
+nodes:
+  - id: plan
+    type: agent
+    provider: claude
+    model: sonnet
+    prompt: |
+      **Request**: $INPUT
+
+      Explore the codebase and write an implementation plan to
+      $ARTIFACTS_DIR/plan.md. List the files to touch and the order to touch
+      them in. Do not change any code.
+    produces:
+      - plan.md
+
+  - id: implement
+    type: agent
+    provider: claude
+    model: sonnet
+    depends_on: [plan]
+    consumes:
+      - plan.md
+    prompt: |
+      Implement this plan:
+
+      $ARTIFACT(plan.md)
+
+      Work through it in order. When you are done, write a one-paragraph
+      summary of what changed to $ARTIFACTS_DIR/summary.md.
+    produces:
+      - summary.md
+
+  - id: verify
+    type: bash
+    depends_on: [implement]
+    script: |
+      pnpm typecheck
+      pnpm lint

@@ -1,0 +1,32 @@
+# A node that repeats until the session says it is done.
+#
+# Every iteration is a fresh session: the prompt is all the session knows, so
+# the progress notes have to go in an artifact for the next iteration to read.
+# The prompt itself never mentions the loop — the session cannot act on it.
+version: 1
+id: fix-until-green
+description: Fix failing tests, iterating until the suite passes
+input:
+  required: false
+  description: An optional note on which failures to focus on
+nodes:
+  - id: fix
+    type: agent
+    provider: claude
+    model: sonnet
+    loop:
+      completion_signal: TESTS_PASS
+      max_iterations: 5
+    prompt: |
+      $INPUT
+
+      Read $ARTIFACTS_DIR/progress.md if it exists. It lists what has already
+      been tried.
+
+      Run the test suite and fix the next failure. Append what you tried to
+      $ARTIFACTS_DIR/progress.md.
+
+      When the whole suite passes, end your message with exactly TESTS_PASS on
+      its own line.
+    produces:
+      - progress.md

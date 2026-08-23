@@ -1,0 +1,15 @@
+# Two bash nodes and no input. Neither declares depends_on, so they run in
+# parallel.
+version: 1
+id: check
+description: Run the type checker and the linter
+nodes:
+  - id: typecheck
+    type: bash
+    script: |
+      pnpm typecheck
+
+  - id: lint
+    type: bash
+    script: |
+      pnpm lint

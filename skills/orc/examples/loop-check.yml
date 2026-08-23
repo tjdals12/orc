@@ -1,0 +1,49 @@
+# A node that repeats until a command says the work is done.
+#
+# The prompt never mentions finishing. completion_bash decides, so the session
+# is left with one job — do the next task — and cannot end the loop early by
+# claiming it is done.
+#
+# Exit 0 ends the loop and exit 1 runs another iteration. Any other code means
+# the check itself is broken, which is why the fallback rides the assignment:
+# grep -c exits 1 when it counts nothing, so `|| echo 0` would print two lines
+# and make the test after it exit 2.
+version: 1
+id: implement-checklist
+description: Implement one unchecked task per iteration until the checklist is empty
+input:
+  required: true
+  description: The work to do, or a summary of the conversation that decided it
+nodes:
+  - id: plan
+    type: agent
+    provider: claude
+    model: sonnet
+    prompt: |
+      $INPUT
+
+      Write $ARTIFACTS_DIR/tasks.md as a markdown checklist, one `- [ ]` line
+      per task, in the order they should be done.
+    produces:
+      - tasks.md
+
+  - id: implement
+    type: agent
+    provider: claude
+    model: sonnet
+    depends_on:
+      - plan
+    consumes:
+      - tasks.md
+    loop:
+      completion_bash: |
+        test -f "$ARTIFACTS_DIR/tasks.md" || exit 1
+        remaining=$(grep -c '^- \[ \]' "$ARTIFACTS_DIR/tasks.md") || remaining=0
+        echo "$remaining task(s) left"
+        test "$remaining" -eq 0
+      max_iterations: 20
+    prompt: |
+      Read $ARTIFACTS_DIR/tasks.md and implement the first task whose box is
+      unchecked.
+
+      Tick that box when the task is done, and change nothing else in the file.

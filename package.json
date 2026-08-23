@@ -1,0 +1,110 @@
+{
+  "name": "orc",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/tjdals12/orc/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "skills/"
+  ],
+  "bin": {
+    "orc": "bin/orc.js"
+  },
+  "imports": {
+    "#package.json": "./package.json",
+    "#skills/*": "./skills/*",
+    "#cli/*": {
+      "types": "./src/cli/*",
+      "default": "./dist/cli/*"
+    },
+    "#database/*": {
+      "types": "./src/database/*",
+      "default": "./dist/database/*"
+    },
+    "#shared/*": {
+      "types": "./src/shared/*",
+      "default": "./dist/shared/*"
+    },
+    "#installation/*": {
+      "types": "./src/installation/*",
+      "default": "./dist/installation/*"
+    },
+    "#project/*": {
+      "types": "./src/project/*",
+      "default": "./dist/project/*"
+    },
+    "#workflow/*": {
+      "types": "./src/workflow/*",
+      "default": "./dist/workflow/*"
+    },
+    "#execution-environment/*": {
+      "types": "./src/execution-environment/*",
+      "default": "./dist/execution-environment/*"
+    },
+    "#workflow-run/*": {
+      "types": "./src/workflow-run/*",
+      "default": "./dist/workflow-run/*"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:cli": "pnpm build && node bin/orc.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@11.22.0+sha512.1ff870c4c6133dfd88fb2afc46dd13d47f09c9794b438c6fdb47ca98caf3bc16381ee0be93a091b8e3824cf01f889f46d7d9e20910fb0be1ab0fb5baa80dd621",
+  "lint-staged": {
+    "src/**/*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,mjs,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^26.2.0",
+    "@types/picomatch": "^4.0.3",
+    "eslint": "^10.9.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.12",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.67.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.241",
+    "@openai/codex-sdk": "^0.146.1",
+    "better-sqlite3": "^13.0.3",
+    "commander": "^15.0.0",
+    "kysely": "^0.29.5",
+    "minijinja-js": "^2.24.0",
+    "ora": "^9.4.1",
+    "picocolors": "^1.1.1",
+    "picomatch": "^4.0.5",
+    "string-width": "^8.2.2",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  }
+}
