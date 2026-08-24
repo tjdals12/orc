@@ -1,19 +1,43 @@
 {
-  "name": "orc",
-  "version": "1.0.0",
-  "description": "",
+  "name": "@tjdals12/orc",
+  "version": "1.0.0-next.1",
+  "description": "Run YAML-defined AI coding workflows against registered projects, each run in its own git worktree",
+  "keywords": [
+    "ai",
+    "ai-agents",
+    "llm",
+    "claude",
+    "claude-code",
+    "codex",
+    "coding-agent",
+    "cli",
+    "workflow",
+    "workflow-engine",
+    "automation",
+    "yaml",
+    "git-worktree"
+  ],
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tjdals12/orc.git"
+  },
   "bugs": {
     "url": "https://github.com/tjdals12/orc/issues"
-  },
-  "engines": {
-    "node": ">=24"
   },
   "files": [
     "bin/",
     "dist/",
     "skills/"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=24"
+  },
   "bin": {
     "orc": "bin/orc.js"
   },
@@ -61,12 +85,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev:cli": "pnpm build && node bin/orc.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
   "packageManager": "pnpm@11.22.0+sha512.1ff870c4c6133dfd88fb2afc46dd13d47f09c9794b438c6fdb47ca98caf3bc16381ee0be93a091b8e3824cf01f889f46d7d9e20910fb0be1ab0fb5baa80dd621",
   "lint-staged": {
     "src/**/*.ts": [
@@ -83,12 +103,15 @@
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.2.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
     "@types/picomatch": "^4.0.3",
     "eslint": "^10.9.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "lint-staged": "^17.3.0",
     "prettier": "^3.9.6",
+    "semantic-release": "^25.0.5",
     "tsx": "^4.23.12",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.67.0"
