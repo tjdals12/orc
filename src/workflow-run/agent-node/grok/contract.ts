@@ -69,34 +69,40 @@ type GrokEvent =
   | z.infer<typeof GrokErrorEventSchema>;
 
 type GrokEventParseResult =
-  { outcome: 'recognized'; event: GrokEvent } | { outcome: 'unknown' } | { outcome: 'invalid' };
+  | { outcome: 'recognized'; event: GrokEvent }
+  | { outcome: 'unknown' }
+  | { outcome: 'invalid'; eventType: string | null };
 
 export function parseGrokEvent(value: unknown): GrokEventParseResult {
   const eventType = GrokEventTypeSchema.safeParse(value);
   if (eventType.error) {
-    return { outcome: 'invalid' };
+    return { outcome: 'invalid', eventType: null };
   }
+  const invalidEvent: GrokEventParseResult = {
+    outcome: 'invalid',
+    eventType: eventType.data.type,
+  };
 
   switch (eventType.data.type) {
     case 'text': {
       const event = GrokTextEventSchema.safeParse(value);
-      return event.error ? { outcome: 'invalid' } : { outcome: 'recognized', event: event.data };
+      return event.error ? invalidEvent : { outcome: 'recognized', event: event.data };
     }
     case 'tool_call': {
       const event = GrokToolCallEventSchema.safeParse(value);
-      return event.error ? { outcome: 'invalid' } : { outcome: 'recognized', event: event.data };
+      return event.error ? invalidEvent : { outcome: 'recognized', event: event.data };
     }
     case 'tool_call_update': {
       const event = GrokToolCallUpdateEventSchema.safeParse(value);
-      return event.error ? { outcome: 'invalid' } : { outcome: 'recognized', event: event.data };
+      return event.error ? invalidEvent : { outcome: 'recognized', event: event.data };
     }
     case 'end': {
       const event = GrokEndEventSchema.safeParse(value);
-      return event.error ? { outcome: 'invalid' } : { outcome: 'recognized', event: event.data };
+      return event.error ? invalidEvent : { outcome: 'recognized', event: event.data };
     }
     case 'error': {
       const event = GrokErrorEventSchema.safeParse(value);
-      return event.error ? { outcome: 'invalid' } : { outcome: 'recognized', event: event.data };
+      return event.error ? invalidEvent : { outcome: 'recognized', event: event.data };
     }
     default:
       return { outcome: 'unknown' };

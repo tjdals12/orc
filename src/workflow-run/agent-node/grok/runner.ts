@@ -193,7 +193,7 @@ export async function runGrokNode(options: {
   let pendingText = '';
   let terminalStopReason: string | null = null;
   let errorMessage: string | null = null;
-  let hasInvalidEvent = false;
+  let invalidEvent: { type: string | null } | null = null;
 
   const recordText = async (text: string): Promise<void> => {
     pendingText += text;
@@ -223,8 +223,8 @@ export async function runGrokNode(options: {
 
     for await (const value of events) {
       const parsedEvent = parseGrokEvent(value);
-      if (parsedEvent.outcome === 'invalid') {
-        hasInvalidEvent = true;
+      if (parsedEvent.outcome === 'invalid' && invalidEvent === null) {
+        invalidEvent = { type: parsedEvent.eventType };
       }
       if (parsedEvent.outcome === 'recognized') {
         const { event } = parsedEvent;
@@ -293,10 +293,11 @@ export async function runGrokNode(options: {
       };
       return agentRunResult;
     }
-    if (hasInvalidEvent) {
+    if (invalidEvent !== null) {
+      const eventName = invalidEvent.type ?? 'stream';
       const agentRunResult: AgentRunResult = {
         outcome: 'failed',
-        reason: 'Grok returned an unsupported stream event',
+        reason: `Grok returned an invalid ${eventName} event`,
       };
       return agentRunResult;
     }
