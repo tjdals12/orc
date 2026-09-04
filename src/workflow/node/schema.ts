@@ -86,9 +86,12 @@ const ClaudeAgentOnRejectSchema = AgentOnRejectBaseSchema.extend(ClaudeAgentSche
 
 const CodexAgentOnRejectSchema = AgentOnRejectBaseSchema.extend(CodexAgentSchema.shape);
 
+const GrokAgentOnRejectSchema = AgentOnRejectBaseSchema.extend(GrokAgentSchema.shape);
+
 const AgentOnRejectSchema = z.discriminatedUnion('provider', [
   ClaudeAgentOnRejectSchema,
   CodexAgentOnRejectSchema,
+  GrokAgentOnRejectSchema,
 ]);
 
 const OnRejectSchema = z.discriminatedUnion('type', [BashOnRejectSchema, AgentOnRejectSchema]);
@@ -120,6 +123,8 @@ export type BashOnRejectFile = z.infer<typeof BashOnRejectSchema>;
 export type ClaudeAgentOnRejectFile = z.infer<typeof ClaudeAgentOnRejectSchema>;
 
 export type CodexAgentOnRejectFile = z.infer<typeof CodexAgentOnRejectSchema>;
+
+export type GrokAgentOnRejectFile = z.infer<typeof GrokAgentOnRejectSchema>;
 
 export type AgentOnRejectFile = z.infer<typeof AgentOnRejectSchema>;
 
