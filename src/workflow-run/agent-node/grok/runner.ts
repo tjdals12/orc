@@ -66,7 +66,32 @@ function waitForGrokExit(child: ChildProcess): Promise<GrokProcessExit> {
   });
 }
 
+function tryDecodeToolOutputText(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+
+  const isByteArray =
+    Array.isArray(value) &&
+    value.every((item) => Number.isInteger(item) && item >= 0 && item <= 255);
+  if (!isByteArray) return null;
+
+  return Buffer.from(value).toString('utf8');
+}
+
 function buildToolResultPreview(rawOutput: unknown): string {
+  if (rawOutput !== null && typeof rawOutput === 'object') {
+    const output = 'output' in rawOutput ? tryDecodeToolOutputText(rawOutput.output) : null;
+    if (output !== null) {
+      return buildPreview(collapseWhitespace(output), PREVIEW_LIMIT);
+    }
+
+    const stdout = 'stdout' in rawOutput ? tryDecodeToolOutputText(rawOutput.stdout) : null;
+    const stderr = 'stderr' in rawOutput ? tryDecodeToolOutputText(rawOutput.stderr) : null;
+    if (stdout !== null || stderr !== null) {
+      const text = [stdout, stderr].filter((part) => part !== null).join(' ');
+      return buildPreview(collapseWhitespace(text), PREVIEW_LIMIT);
+    }
+  }
+
   const serialized = JSON.stringify(rawOutput) ?? '';
   return buildPreview(collapseWhitespace(serialized), PREVIEW_LIMIT);
 }
@@ -211,14 +236,17 @@ export async function runGrokNode(options: {
         }
         if (event.type === 'tool_call_update') {
           await flushText();
-          const toolName = toolNameById.get(event.toolCallId) ?? 'unknown';
-          await recordOutput({
-            provider: 'grok',
-            kind: 'tool_call_update',
-            tool_name: toolName,
-            status: event.status,
-            output_preview: buildToolResultPreview(event.rawOutput),
-          });
+          const isFinalUpdate = event.status === 'completed' || event.status === 'failed';
+          if (isFinalUpdate) {
+            const toolName = toolNameById.get(event.toolCallId) ?? 'unknown';
+            await recordOutput({
+              provider: 'grok',
+              kind: 'tool_call_update',
+              tool_name: toolName,
+              status: event.status,
+              output_preview: buildToolResultPreview(event.rawOutput),
+            });
+          }
         }
         if (event.type === 'end') {
           await flushText();
