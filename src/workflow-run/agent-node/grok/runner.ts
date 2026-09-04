@@ -244,14 +244,15 @@ export async function runGrokNode(options: {
         }
         if (event.type === 'tool_call_update') {
           await flushText();
-          const isFinalUpdate = event.status === 'completed' || event.status === 'failed';
+          const status = event.status;
+          const isFinalUpdate = status === 'completed' || status === 'failed';
           if (isFinalUpdate) {
             const toolName = toolNameById.get(event.toolCallId) ?? 'unknown';
             await recordOutput({
               provider: 'grok',
               kind: 'tool_call_update',
               tool_name: toolName,
-              status: event.status,
+              status,
               output_preview: buildToolResultPreview(event.rawOutput),
             });
           }

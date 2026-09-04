@@ -46,7 +46,7 @@ const GrokToolCallEventSchema = z.object({
 const GrokToolCallUpdateEventSchema = z.object({
   type: z.literal('tool_call_update'),
   toolCallId: z.string(),
-  status: z.string(),
+  status: z.string().nullable(),
   rawOutput: z.unknown().optional(),
 });
 
