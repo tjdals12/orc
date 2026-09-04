@@ -6,6 +6,7 @@ import util from 'node:util';
 
 import { ProcessGroupRegistry } from '#shared/process-group-registry.js';
 import { buildPreview, collapseWhitespace } from '#shared/text.js';
+import { checkGrokCliCompatibility } from '#installation/provider/grok/version-check.js';
 
 import { detectCompletionSignal } from '../completion-signal.js';
 import { PREVIEW_LIMIT } from '../output-text.js';
@@ -102,6 +103,36 @@ export async function runGrokNode(options: {
     recordSession,
     abortSignal,
   } = options;
+
+  const compatibility = await checkGrokCliCompatibility();
+  if (compatibility.status === 'not-found') {
+    const agentRunResult: AgentRunResult = {
+      outcome: 'failed',
+      reason: 'Grok CLI was not found. Install Grok Build before running this node.',
+    };
+    return agentRunResult;
+  }
+  if (compatibility.status === 'too-old') {
+    const agentRunResult: AgentRunResult = {
+      outcome: 'failed',
+      reason: 'Grok CLI is too old. Run "grok update --stable" before running this node.',
+    };
+    return agentRunResult;
+  }
+  if (compatibility.status === 'unsupported-major') {
+    const agentRunResult: AgentRunResult = {
+      outcome: 'failed',
+      reason: 'Grok CLI has an unsupported major version. Update orc before running this node.',
+    };
+    return agentRunResult;
+  }
+  if (compatibility.status === 'check-failed') {
+    const agentRunResult: AgentRunResult = {
+      outcome: 'failed',
+      reason: 'Could not check Grok CLI compatibility. Run "grok version --json" and try again.',
+    };
+    return agentRunResult;
+  }
 
   let child: ChildProcessByStdio<null, Readable, Readable>;
   try {

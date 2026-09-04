@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { ClaudeAgentSchema } from './provider/claude.js';
 import { CodexAgentSchema } from './provider/codex.js';
+import { GrokAgentSchema } from './provider/grok.js';
 
 const IdSchema = z
   .string()
@@ -63,9 +64,12 @@ const ClaudeAgentNodeSchema = AgentNodeBaseSchema.extend(ClaudeAgentSchema.shape
 
 const CodexAgentNodeSchema = AgentNodeBaseSchema.extend(CodexAgentSchema.shape);
 
+const GrokAgentNodeSchema = AgentNodeBaseSchema.extend(GrokAgentSchema.shape);
+
 const AgentNodeSchema = z.discriminatedUnion('provider', [
   ClaudeAgentNodeSchema,
   CodexAgentNodeSchema,
+  GrokAgentNodeSchema,
 ]);
 
 const BashOnRejectSchema = z.strictObject({
@@ -106,6 +110,8 @@ export type BashNodeFile = z.infer<typeof BashNodeSchema>;
 export type ClaudeAgentNodeFile = z.infer<typeof ClaudeAgentNodeSchema>;
 
 export type CodexAgentNodeFile = z.infer<typeof CodexAgentNodeSchema>;
+
+export type GrokAgentNodeFile = z.infer<typeof GrokAgentNodeSchema>;
 
 export type AgentNodeFile = z.infer<typeof AgentNodeSchema>;
 
