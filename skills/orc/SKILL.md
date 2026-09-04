@@ -355,11 +355,21 @@ orc doctor --json
       {
         "id": "claude",
         "status": "signed-in",
-        "method": "claude.ai"
+        "method": "claude.ai",
+        "cli": null
       },
       {
         "id": "codex",
-        "status": "signed-out"
+        "status": "signed-out",
+        "cli": null
+      },
+      {
+        "id": "grok",
+        "status": "signed-in",
+        "method": "cached credentials",
+        "cli": {
+          "status": "available"
+        }
       }
     ]
   },
@@ -386,4 +396,7 @@ orc doctor --json
 Report the items that are not ready as a short summary — here codex is signed
 out, the project is not registered, and the skill is not installed — then tell
 the user to run `orc doctor`, which prints the command that fixes each one. A
-`null` item means there was nothing to judge, not a failure.
+`null` item means there was nothing to judge, not a failure. A provider's
+`cli` value is its local CLI readiness: Grok may report `not-found`,
+`check-failed`, `unsupported`, or `may-be-incompatible`; use the doctor output
+and its guidance rather than claiming that the provider can run.

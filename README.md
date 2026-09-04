@@ -53,6 +53,7 @@ The agents orc supports.
 | ----------- | ---------- |
 | Claude Code | `claude`   |
 | Codex       | `codex`    |
+| Grok Build  | `grok`     |
 
 ## Core Concepts
 
@@ -91,9 +92,12 @@ Sign in to the ones you are not.
 ```bash
 orc auth login claude
 orc auth login codex
+orc auth login grok
 ```
 
-If you already have Claude Code or Codex installed, `claude auth login` and `codex login` work just as well.
+If you already have Claude Code, Codex, or Grok Build installed, `claude auth login`, `codex login`, and `grok login` work just as well.
+
+Grok Build is installed separately from orc; see [x.ai/cli](https://x.ai/cli). orc supports Grok `>=1.0.13, <2.0.0`. A newer Grok version may work, but `orc doctor` warns that it may be incompatible.
 
 orc keeps workflows and run history per project. Register the project you want to run workflows in.
 
@@ -503,6 +507,7 @@ Installation
 Providers
 ✔ claude      signed in
 ✔ codex       signed in
+✔ grok        signed in
 
 Project
 ✔ Status      registered

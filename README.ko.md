@@ -53,6 +53,7 @@ orc는 이러한 반복적인 흐름을 YAML로 정의해 실행하는, AI 에�
 | ----------- | ---------- |
 | Claude Code | `claude`   |
 | Codex       | `codex`    |
+| Grok Build  | `grok`     |
 
 ## 핵심 개념
 
@@ -91,9 +92,12 @@ orc auth status
 ```bash
 orc auth login claude
 orc auth login codex
+orc auth login grok
 ```
 
-Claude Code나 Codex가 이미 설치되어 있다면 `claude auth login`, `codex login`으로 로그인해도 됩니다.
+Claude Code, Codex, Grok Build가 이미 설치되어 있다면 `claude auth login`, `codex login`, `grok login`으로 로그인해도 됩니다.
+
+Grok Build는 orc와 별도로 설치합니다. 설치 방법은 [x.ai/cli](https://x.ai/cli)에서 확인합니다. orc는 Grok `>=1.0.13, <2.0.0`을 지원합니다. 더 새로운 Grok 버전도 실행할 수 있지만, 호환되지 않을 수 있다는 경고를 `orc doctor`가 표시합니다.
 
 orc는 워크플로우와 실행 기록을 프로젝트 단위로 관리합니다. 워크플로우를 실행할 프로젝트를 등록합니다.
 
@@ -503,6 +507,7 @@ Installation
 Providers
 ✔ claude      signed in
 ✔ codex       signed in
+✔ grok        signed in
 
 Project
 ✔ Status      registered
