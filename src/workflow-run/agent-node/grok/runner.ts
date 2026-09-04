@@ -130,6 +130,13 @@ export async function runGrokNode(options: {
   } = options;
 
   const compatibility = await checkGrokCliCompatibility();
+  if (abortSignal.aborted) {
+    const agentRunResult: AgentRunResult = {
+      outcome: 'failed',
+      reason: 'Aborted by cancellation',
+    };
+    return agentRunResult;
+  }
   if (compatibility.status === 'not-found') {
     const agentRunResult: AgentRunResult = {
       outcome: 'failed',
