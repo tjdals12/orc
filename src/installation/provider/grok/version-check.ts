@@ -13,6 +13,10 @@ const minimumGrokVersion: SemanticVersion = { major: 1, minor: 0, patch: 13 };
 
 const maximumTestedGrokVersion: SemanticVersion = { major: 1, minor: 0, patch: 13 };
 
+export function formatGrokSupportedVersionRange(): string {
+  return `>=${minimumGrokVersion.major}.${minimumGrokVersion.minor}.${minimumGrokVersion.patch}, <${minimumGrokVersion.major + 1}.0.0`;
+}
+
 export type GrokCliCompatibility =
   | { status: 'not-found' }
   | { status: 'compatible' }
