@@ -5,8 +5,18 @@ import path from 'node:path';
 import { tryRunInteractiveCliCommand } from '../cli-command.js';
 import type { ProviderAuthStatus } from '../auth.js';
 
+function buildGrokHomeDirPath(): string {
+  const overridden = process.env.GROK_HOME;
+  if (overridden) {
+    return overridden;
+  }
+
+  return path.join(homedir(), '.grok');
+}
+
 function buildGrokAuthPath(): string {
-  return path.join(homedir(), '.grok', 'auth.json');
+  const grokHomeDirPath = buildGrokHomeDirPath();
+  return path.join(grokHomeDirPath, 'auth.json');
 }
 
 export async function checkGrokAuthStatus(): Promise<ProviderAuthStatus> {
