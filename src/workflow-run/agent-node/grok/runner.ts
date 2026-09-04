@@ -215,9 +215,10 @@ export async function runGrokNode(options: {
     await recordOutput({ provider: 'grok', kind: 'text', text: line });
   };
 
+  const exitReported = waitForGrokExit(child);
+  const stderrCollected = collectStderr(child.stderr);
+
   try {
-    const exitReported = waitForGrokExit(child);
-    const stderrCollected = collectStderr(child.stderr);
     const events = parseGrokOutput(child.stdout);
 
     for await (const value of events) {
@@ -332,6 +333,7 @@ export async function runGrokNode(options: {
     return agentRunResult;
   } catch (error) {
     ProcessGroupRegistry.stop(child);
+    await Promise.allSettled([exitReported, stderrCollected]);
     if (abortSignal.aborted) {
       const agentRunResult: AgentRunResult = {
         outcome: 'failed',
