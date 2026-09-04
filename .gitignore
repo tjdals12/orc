@@ -148,6 +148,8 @@ vite.config.ts.timestamp-*
 # The packaged source is skills/orc/ — these two are what skill install writes.
 .claude/skills/orc/
 .agents/skills/orc/
+.codex/config.toml
+.codex/skills/orc/
 
 # macOS
 .DS_Store
