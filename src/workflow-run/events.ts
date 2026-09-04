@@ -128,6 +128,10 @@ export function parseEventDetail(type: WorkflowRunEventType, data: string | null
       const detail = `${session.provider} · ${session.model} · ${session.thread_id}`;
       return detail;
     }
+    if (session.provider === 'grok') {
+      const detail = `${session.provider} · ${session.model} · ${session.session_id}`;
+      return detail;
+    }
 
     session satisfies never;
   }

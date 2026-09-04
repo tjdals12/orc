@@ -14,7 +14,10 @@ import { loadConfig } from '#installation/config/load.js';
 import { InvalidConfigError } from '#installation/config/error.js';
 import { tryLoadSetupStamp } from '#installation/setup-stamp/load.js';
 import { SETUP_VERSION } from '#installation/setup-stamp/schema.js';
-import { checkProviderAuths, type ProviderAuth } from '#installation/provider/auth.js';
+import {
+  checkProviderDoctorStatuses,
+  type ProviderDoctorStatus,
+} from '#installation/provider/auth.js';
 import { openDatabase } from '#database/open.js';
 import { ProjectRepository } from '#project/repository.js';
 import { loadProjectConfig } from '#project/config/load.js';
@@ -42,7 +45,7 @@ export type DoctorResult = {
     configPath: string;
     configCheck: ConfigCheck | null;
     setupStatus: SetupStatus;
-    providerAuths: ProviderAuth[];
+    providerStatuses: ProviderDoctorStatus[];
   };
   project: {
     path: string;
@@ -76,9 +79,9 @@ export class DoctorHandler {
     const setupStatus = this.checkSetupStatus(setupStampPath, configPath, databasePath);
 
     this._reporter.start('Checking providers...');
-    let providerAuths: ProviderAuth[];
+    let providerStatuses: ProviderDoctorStatus[];
     try {
-      providerAuths = await checkProviderAuths();
+      providerStatuses = await checkProviderDoctorStatuses();
     } finally {
       this._reporter.stop();
     }
@@ -107,7 +110,7 @@ export class DoctorHandler {
         setupStatus,
         configCheck,
         configPath,
-        providerAuths,
+        providerStatuses,
       },
       project: {
         path: projectPath,
@@ -219,10 +222,15 @@ export class DoctorHandler {
   toJson(result: DoctorResult) {
     const { installation, project } = result;
 
-    const providers = installation.providerAuths.map((auth) =>
-      auth.status.status === 'signed-in'
-        ? { id: auth.id, status: auth.status.status, method: auth.status.method }
-        : { id: auth.id, status: auth.status.status },
+    const providers = installation.providerStatuses.map((provider) =>
+      provider.authStatus.status === 'signed-in'
+        ? {
+            id: provider.id,
+            status: provider.authStatus.status,
+            method: provider.authStatus.method,
+            cli: provider.cliStatus,
+          }
+        : { id: provider.id, status: provider.authStatus.status, cli: provider.cliStatus },
     );
 
     const installationConfig =

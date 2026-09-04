@@ -1,6 +1,7 @@
 import { BashNode } from './node/bash-node.js';
 import { ClaudeAgentNode } from './node/claude-agent-node.js';
 import { CodexAgentNode } from './node/codex-agent-node.js';
+import { GrokAgentNode } from './node/grok-agent-node.js';
 import type { AgentNode } from './node/agent-node.js';
 import { ApprovalNode } from './node/approval-node.js';
 import type { WorkflowNode } from './node/workflow-node.js';
@@ -21,6 +22,10 @@ function buildAgentNode(file: AgentNodeFile): AgentNode {
     case 'codex': {
       const codexAgentNode = CodexAgentNode.fromFile(file);
       return codexAgentNode;
+    }
+    case 'grok': {
+      const grokAgentNode = GrokAgentNode.fromFile(file);
+      return grokAgentNode;
     }
   }
 }
