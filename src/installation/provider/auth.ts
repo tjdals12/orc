@@ -1,5 +1,6 @@
 import { checkClaudeAuthStatus, signInToClaude, signOutFromClaude } from './claude.js';
 import { checkCodexAuthStatus, signInToCodex, signOutFromCodex } from './codex.js';
+import { checkGrokAuthStatus, signInToGrok, signOutFromGrok } from './grok/auth.js';
 
 export type ProviderAuthStatus =
   | { status: 'signed-in'; method: string }
@@ -35,6 +36,13 @@ const AUTH_PROVIDERS: AuthProvider[] = [
     signIn: signInToCodex,
     signOut: signOutFromCodex,
     signInNote: 'Remote machine? Sign in with your own codex CLI: "codex login --device-auth".',
+  },
+  {
+    id: 'grok',
+    checkAuthStatus: checkGrokAuthStatus,
+    signIn: signInToGrok,
+    signOut: signOutFromGrok,
+    signInNote: 'Remote machine? Sign in with your own grok CLI: "grok login --device-auth".',
   },
 ];
 
