@@ -157,10 +157,31 @@ export async function runGrokNode(options: {
   abortSignal.addEventListener('abort', stopOnAbort, { once: true });
 
   const toolNameById = new Map<string, string>();
-  let proseText = '';
+  const proseLines: string[] = [];
+  let pendingText = '';
   let terminalStopReason: string | null = null;
   let errorMessage: string | null = null;
   let hasInvalidEvent = false;
+
+  const recordText = async (text: string): Promise<void> => {
+    pendingText += text;
+    const lines = pendingText.split('\n');
+    pendingText = lines.pop() ?? '';
+
+    for (const line of lines) {
+      proseLines.push(line);
+      await recordOutput({ provider: 'grok', kind: 'text', text: line });
+    }
+  };
+
+  const flushText = async (): Promise<void> => {
+    if (pendingText.length === 0) return;
+
+    const line = pendingText;
+    pendingText = '';
+    proseLines.push(line);
+    await recordOutput({ provider: 'grok', kind: 'text', text: line });
+  };
 
   try {
     const exitReported = waitForGrokExit(child);
@@ -175,10 +196,10 @@ export async function runGrokNode(options: {
       if (parsedEvent.outcome === 'recognized') {
         const { event } = parsedEvent;
         if (event.type === 'text') {
-          proseText += event.data;
-          await recordOutput({ provider: 'grok', kind: 'text', text: event.data });
+          await recordText(event.data);
         }
         if (event.type === 'tool_call') {
+          await flushText();
           toolNameById.set(event.toolCallId, event.toolName);
           await recordOutput({
             provider: 'grok',
@@ -189,6 +210,7 @@ export async function runGrokNode(options: {
           });
         }
         if (event.type === 'tool_call_update') {
+          await flushText();
           const toolName = toolNameById.get(event.toolCallId) ?? 'unknown';
           await recordOutput({
             provider: 'grok',
@@ -199,15 +221,18 @@ export async function runGrokNode(options: {
           });
         }
         if (event.type === 'end') {
+          await flushText();
           terminalStopReason = event.stopReason;
           await recordSession({ provider: 'grok', session_id: event.sessionId, model });
         }
         if (event.type === 'error') {
+          await flushText();
           errorMessage = event.message;
         }
       }
     }
 
+    await flushText();
     const [exit, stderr] = await Promise.all([exitReported, stderrCollected]);
 
     if (exit.outcome === 'spawn-failed') {
@@ -265,6 +290,7 @@ export async function runGrokNode(options: {
       return agentRunResult;
     }
 
+    const proseText = proseLines.join('\n');
     const signalDetected =
       completionSignal !== null && detectCompletionSignal(proseText, completionSignal);
     const agentRunResult: AgentRunResult = { outcome: 'succeeded', signalDetected };
