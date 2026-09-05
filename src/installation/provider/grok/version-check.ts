@@ -1,13 +1,12 @@
 import { z } from 'zod';
 
 import { tryRunCliCommand } from '../cli-command.js';
-
 import {
   isNewerVersion,
   isOlderVersion,
   parseSemanticVersion,
   type SemanticVersion,
-} from './semantic-version.js';
+} from '../semantic-version.js';
 
 const minimumGrokVersion: SemanticVersion = { major: 1, minor: 0, patch: 13 };
 
