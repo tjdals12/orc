@@ -75,6 +75,18 @@ Install orc globally.
 npm install -g @tjdals12/orc
 ```
 
+### Install the agent CLIs you plan to use
+
+Install the CLI for each agent you plan to use in a workflow.
+See the provider's documentation for installation instructions.
+
+| Agent      | CLI     | Supported versions  |
+| ---------- | ------- | ------------------- |
+| Codex      | `codex` | `>=0.153.4, <1.0.0` |
+| Grok Build | `grok`  | `>=1.0.13, <2.0.0`  |
+
+Run `orc doctor` to check whether the required CLI is installed and compatible.
+
 Set orc up on your machine. You can run this from any directory.
 
 ```bash
