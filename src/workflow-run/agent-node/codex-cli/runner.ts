@@ -6,6 +6,7 @@ import util from 'node:util';
 
 import { ProcessGroupRegistry } from '#shared/process-group-registry.js';
 import { buildPreview, collapseWhitespace, splitTextLines } from '#shared/text.js';
+import { checkCodexCliCompatibility } from '#installation/provider/codex-cli/version-check.js';
 
 import { detectCompletionSignal } from '../completion-signal.js';
 import { JsonLinesParseError, parseJsonLines } from '../json-lines.js';
@@ -130,8 +131,34 @@ export async function runCodexNode(options: {
     recordSession,
     abortSignal,
   } = options;
+
+  const compatibility = await checkCodexCliCompatibility();
   if (abortSignal.aborted) {
     return { outcome: 'failed', reason: 'Aborted by cancellation' };
+  }
+  if (compatibility.status === 'not-found') {
+    return {
+      outcome: 'failed',
+      reason: 'Codex CLI was not found. Install Codex before running this node.',
+    };
+  }
+  if (compatibility.status === 'too-old') {
+    return {
+      outcome: 'failed',
+      reason: 'Codex CLI is too old. Update Codex to a supported version before running this node.',
+    };
+  }
+  if (compatibility.status === 'unsupported-major') {
+    return {
+      outcome: 'failed',
+      reason: 'Codex CLI has an unsupported major version. Update orc before running this node.',
+    };
+  }
+  if (compatibility.status === 'check-failed') {
+    return {
+      outcome: 'failed',
+      reason: 'Could not check Codex CLI compatibility. Run "codex --version" and try again.',
+    };
   }
 
   let child: ChildProcessByStdio<Writable, Readable, Readable>;
