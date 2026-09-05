@@ -7,7 +7,7 @@ import type { AgentOnReject } from '#workflow/node/on-reject.js';
 import type { LoopVerdictKind, NodeRunResult } from '../types.js';
 
 import { runClaudeNode } from './claude/runner.js';
-import { runCodexNode } from './codex-cli/runner.js';
+import { runCodexNode } from './codex/runner.js';
 import { runGrokNode } from './grok/runner.js';
 import type { AgentRunResult, RecordAgentOutput, RecordAgentSession } from './types.js';
 

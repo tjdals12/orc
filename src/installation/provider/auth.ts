@@ -1,5 +1,6 @@
 import { checkClaudeAuthStatus, signInToClaude, signOutFromClaude } from './claude.js';
-import { checkCodexAuthStatus, signInToCodex, signOutFromCodex } from './codex-cli/auth.js';
+import { checkCodexAuthStatus, signInToCodex, signOutFromCodex } from './codex/auth.js';
+import { checkCodexCliStatus } from './codex/cli-status.js';
 import { checkGrokAuthStatus, signInToGrok, signOutFromGrok } from './grok/auth.js';
 import { checkGrokCliStatus } from './grok/cli-status.js';
 
@@ -49,7 +50,7 @@ const PROVIDERS: Provider[] = [
   {
     id: 'codex',
     checkAuthStatus: checkCodexAuthStatus,
-    checkCliStatus: null,
+    checkCliStatus: checkCodexCliStatus,
     signIn: signInToCodex,
     signOut: signOutFromCodex,
     signInNote: 'Remote machine? Sign in with your own codex CLI: "codex login --device-auth".',
