@@ -19,6 +19,8 @@ type CodexCliProcessExit =
   | { outcome: 'exited'; code: number | null }
   | { outcome: 'killed'; signal: NodeJS.Signals };
 
+const SIGINT_GRACE_MS = 5000;
+
 function buildCodexCliArgs(options: {
   model: string;
   modelReasoningEffort: string | null;
@@ -173,7 +175,26 @@ export async function runCodexNode(options: {
     return { outcome: 'failed', reason: `Failed to spawn Codex: ${detail}` };
   }
 
+  let stopRequested = false;
+  let sigintGraceTimer: NodeJS.Timeout | null = null;
+  const stopCodexCli = (): void => {
+    if (stopRequested) return;
+    stopRequested = true;
+
+    try {
+      child.kill('SIGINT');
+    } catch {
+      return;
+    }
+
+    sigintGraceTimer = setTimeout(() => {
+      ProcessGroupRegistry.stop(child);
+    }, SIGINT_GRACE_MS);
+    sigintGraceTimer.unref();
+  };
   ProcessGroupRegistry.register(child);
+  abortSignal.addEventListener('abort', stopCodexCli, { once: true });
+
   const exitReported = waitForCodexCliExit(child);
   const stderrCollected = collectStderr(child.stderr);
   const proseLines: string[] = [];
@@ -244,6 +265,9 @@ export async function runCodexNode(options: {
     if (exit.outcome === 'spawn-failed') {
       return { outcome: 'failed', reason: `Failed to spawn Codex: ${exit.message}` };
     }
+    if (abortSignal.aborted) {
+      return { outcome: 'failed', reason: 'Aborted by cancellation' };
+    }
     if (exit.outcome === 'killed') {
       return { outcome: 'failed', reason: `Codex was killed by ${exit.signal}` };
     }
@@ -267,7 +291,7 @@ export async function runCodexNode(options: {
       completionSignal !== null && detectCompletionSignal(proseText, completionSignal);
     return { outcome: 'succeeded', signalDetected };
   } catch (error) {
-    ProcessGroupRegistry.stop(child);
+    stopCodexCli();
     await Promise.allSettled([exitReported, stderrCollected]);
     if (abortSignal.aborted) {
       return { outcome: 'failed', reason: 'Aborted by cancellation' };
@@ -277,5 +301,8 @@ export async function runCodexNode(options: {
     }
     const detail = error instanceof Error ? error.message : util.inspect(error);
     return { outcome: 'failed', reason: `Codex failed: ${detail}` };
+  } finally {
+    abortSignal.removeEventListener('abort', stopCodexCli);
+    if (sigintGraceTimer !== null) clearTimeout(sigintGraceTimer);
   }
 }
