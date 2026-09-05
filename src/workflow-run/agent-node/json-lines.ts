@@ -1,8 +1,8 @@
 import { StringDecoder } from 'node:string_decoder';
 
-export class GrokOutputParseError extends Error {}
+export class JsonLinesParseError extends Error {}
 
-export async function* parseGrokOutput(source: AsyncIterable<Buffer>): AsyncGenerator<unknown> {
+export async function* parseJsonLines(source: AsyncIterable<Buffer>): AsyncGenerator<unknown> {
   const decoder = new StringDecoder();
   let buffer = '';
 
@@ -10,7 +10,7 @@ export async function* parseGrokOutput(source: AsyncIterable<Buffer>): AsyncGene
     try {
       return JSON.parse(line);
     } catch {
-      throw new GrokOutputParseError('Grok returned invalid JSON');
+      throw new JsonLinesParseError();
     }
   };
 

@@ -9,10 +9,10 @@ import { buildPreview, collapseWhitespace } from '#shared/text.js';
 import { checkGrokCliCompatibility } from '#installation/provider/grok/version-check.js';
 
 import { detectCompletionSignal } from '../completion-signal.js';
-import { PREVIEW_LIMIT } from '../output-text.js';
+import { JsonLinesParseError, parseJsonLines } from '../json-lines.js';
+import { PREVIEW_LIMIT, tryDecodeOutputText } from '../output-text.js';
 import type { AgentRunResult, RecordAgentOutput, RecordAgentSession } from '../types.js';
 import { parseGrokEvent } from './contract.js';
-import { GrokOutputParseError, parseGrokOutput } from './output.js';
 
 type GrokProcessExit =
   | { outcome: 'spawn-failed'; message: string }
@@ -66,26 +66,15 @@ function waitForGrokExit(child: ChildProcess): Promise<GrokProcessExit> {
   });
 }
 
-function tryDecodeToolOutputText(value: unknown): string | null {
-  if (typeof value === 'string') return value;
-
-  const isByteArray =
-    Array.isArray(value) &&
-    value.every((item) => Number.isInteger(item) && item >= 0 && item <= 255);
-  if (!isByteArray) return null;
-
-  return Buffer.from(value).toString('utf8');
-}
-
 function buildToolResultPreview(rawOutput: unknown): string {
   if (rawOutput !== null && typeof rawOutput === 'object') {
-    const output = 'output' in rawOutput ? tryDecodeToolOutputText(rawOutput.output) : null;
+    const output = 'output' in rawOutput ? tryDecodeOutputText(rawOutput.output) : null;
     if (output !== null) {
       return buildPreview(collapseWhitespace(output), PREVIEW_LIMIT);
     }
 
-    const stdout = 'stdout' in rawOutput ? tryDecodeToolOutputText(rawOutput.stdout) : null;
-    const stderr = 'stderr' in rawOutput ? tryDecodeToolOutputText(rawOutput.stderr) : null;
+    const stdout = 'stdout' in rawOutput ? tryDecodeOutputText(rawOutput.stdout) : null;
+    const stderr = 'stderr' in rawOutput ? tryDecodeOutputText(rawOutput.stderr) : null;
     if (stdout !== null || stderr !== null) {
       const text = [stdout, stderr].filter((part) => part !== null).join(' ');
       return buildPreview(collapseWhitespace(text), PREVIEW_LIMIT);
@@ -219,7 +208,7 @@ export async function runGrokNode(options: {
   const stderrCollected = collectStderr(child.stderr);
 
   try {
-    const events = parseGrokOutput(child.stdout);
+    const events = parseJsonLines(child.stdout);
 
     for await (const value of events) {
       const parsedEvent = parseGrokEvent(value);
@@ -343,8 +332,11 @@ export async function runGrokNode(options: {
       };
       return agentRunResult;
     }
-    if (error instanceof GrokOutputParseError) {
-      const agentRunResult: AgentRunResult = { outcome: 'failed', reason: error.message };
+    if (error instanceof JsonLinesParseError) {
+      const agentRunResult: AgentRunResult = {
+        outcome: 'failed',
+        reason: 'Grok returned invalid JSON',
+      };
       return agentRunResult;
     }
     const detail = error instanceof Error ? error.message : util.inspect(error);
