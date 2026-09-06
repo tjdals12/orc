@@ -5,17 +5,20 @@ const execFileAsync = promisify(execFile);
 
 const COMMAND_TIMEOUT_MS = 10_000;
 
-type CliCommandOutput = { stdout: string; stderr: string };
+type CliCommandOutput = {
+  outcome: 'succeeded' | 'not-found' | 'failed';
+  stdout: string;
+  stderr: string;
+};
 
-function readCommandOutput(e: unknown): CliCommandOutput {
+function readCommandOutput(e: unknown): { stdout: string; stderr: string } {
   if (e === null || typeof e !== 'object') {
     return { stdout: '', stderr: '' };
   }
 
   const stdout = 'stdout' in e ? String(e.stdout) : '';
   const stderr = 'stderr' in e ? String(e.stderr) : '';
-  const output = { stdout, stderr };
-  return output;
+  return { stdout, stderr };
 }
 
 export async function tryRunCliCommand(command: string, args: string[]): Promise<CliCommandOutput> {
@@ -27,11 +30,11 @@ export async function tryRunCliCommand(command: string, args: string[]): Promise
         LC_ALL: 'C',
       },
     });
-    const output = { stdout, stderr };
-    return output;
+    return { outcome: 'succeeded', stdout, stderr };
   } catch (e) {
-    const output = readCommandOutput(e);
-    return output;
+    const error = e as NodeJS.ErrnoException;
+    const outcome = error.code === 'ENOENT' ? 'not-found' : 'failed';
+    return { outcome, ...readCommandOutput(e) };
   }
 }
 

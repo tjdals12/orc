@@ -53,6 +53,7 @@ The agents orc supports.
 | ----------- | ---------- |
 | Claude Code | `claude`   |
 | Codex       | `codex`    |
+| Grok Build  | `grok`     |
 
 ## Core Concepts
 
@@ -74,6 +75,19 @@ Install orc globally.
 npm install -g @tjdals12/orc
 ```
 
+### Install the agent CLIs you plan to use
+
+Install the CLI for each agent you plan to use in a workflow.
+See the provider's documentation for installation instructions.
+
+| Agent       | CLI      | Supported versions  |
+| ----------- | -------- | ------------------- |
+| Claude Code | `claude` | `>=2.1.261, <3.0.0` |
+| Codex       | `codex`  | `>=0.153.4, <1.0.0` |
+| Grok Build  | `grok`   | `>=1.0.13, <2.0.0`  |
+
+Run `orc doctor` to check whether the required CLI is installed and compatible.
+
 Set orc up on your machine. You can run this from any directory.
 
 ```bash
@@ -91,9 +105,14 @@ Sign in to the ones you are not.
 ```bash
 orc auth login claude
 orc auth login codex
+orc auth login grok
 ```
 
-If you already have Claude Code or Codex installed, `claude auth login` and `codex login` work just as well.
+If you already have Claude Code, Codex, or Grok Build installed, `claude auth login`, `codex login`, and `grok login` work just as well.
+
+Claude Code is installed separately from orc; see [Claude Code](https://code.claude.com/docs/en/overview). orc supports Claude Code `>=2.1.261, <3.0.0`. A newer 2.x version may work, but `orc doctor` warns that it may be incompatible.
+
+Grok Build is installed separately from orc; see [x.ai/cli](https://x.ai/cli). orc supports Grok `>=1.0.13, <2.0.0`. A newer Grok version may work, but `orc doctor` warns that it may be incompatible.
 
 orc keeps workflows and run history per project. Register the project you want to run workflows in.
 
@@ -503,6 +522,7 @@ Installation
 Providers
 ✔ claude      signed in
 ✔ codex       signed in
+✔ grok        signed in
 
 Project
 ✔ Status      registered

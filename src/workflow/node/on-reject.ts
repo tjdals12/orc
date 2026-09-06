@@ -2,6 +2,7 @@ import type {
   BashOnRejectFile,
   ClaudeAgentOnRejectFile,
   CodexAgentOnRejectFile,
+  GrokAgentOnRejectFile,
   OnRejectFile,
 } from './schema.js';
 import { tokenizeText } from './text-token.js';
@@ -58,7 +59,7 @@ export abstract class AgentOnRejectBase {
     return referencesReason;
   }
 
-  abstract get provider(): 'claude' | 'codex';
+  abstract get provider(): 'claude' | 'codex' | 'grok';
 }
 
 type ClaudeAgentOnRejectOptions = {
@@ -137,7 +138,44 @@ export class CodexAgentOnReject extends AgentOnRejectBase {
   }
 }
 
-export type AgentOnReject = ClaudeAgentOnReject | CodexAgentOnReject;
+type GrokAgentOnRejectOptions = {
+  reasoningEffort: string | null;
+  maxTurns: number | null;
+};
+
+export class GrokAgentOnReject extends AgentOnRejectBase {
+  private readonly _options: GrokAgentOnRejectOptions;
+
+  private constructor(args: { prompt: string; model: string; options: GrokAgentOnRejectOptions }) {
+    super({
+      prompt: args.prompt,
+      model: args.model,
+    });
+    this._options = args.options;
+  }
+
+  static fromFile(file: GrokAgentOnRejectFile): GrokAgentOnReject {
+    const grokAgentOnReject = new GrokAgentOnReject({
+      prompt: file.prompt,
+      model: file.model,
+      options: {
+        reasoningEffort: file.options?.reasoning_effort ?? null,
+        maxTurns: file.options?.max_turns ?? null,
+      },
+    });
+    return grokAgentOnReject;
+  }
+
+  get provider(): 'grok' {
+    return 'grok';
+  }
+
+  get options(): GrokAgentOnRejectOptions {
+    return this._options;
+  }
+}
+
+export type AgentOnReject = ClaudeAgentOnReject | CodexAgentOnReject | GrokAgentOnReject;
 
 export type OnReject = BashOnReject | AgentOnReject;
 
@@ -151,6 +189,9 @@ export function onRejectFromFile(file: OnRejectFile): OnReject {
     }
     if (file.provider === 'codex') {
       return CodexAgentOnReject.fromFile(file);
+    }
+    if (file.provider === 'grok') {
+      return GrokAgentOnReject.fromFile(file);
     }
   }
   file satisfies never;

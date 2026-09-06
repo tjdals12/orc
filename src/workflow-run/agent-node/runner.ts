@@ -8,6 +8,7 @@ import type { LoopVerdictKind, NodeRunResult } from '../types.js';
 
 import { runClaudeNode } from './claude/runner.js';
 import { runCodexNode } from './codex/runner.js';
+import { runGrokNode } from './grok/runner.js';
 import type { AgentRunResult, RecordAgentOutput, RecordAgentSession } from './types.js';
 
 type RecordAgentIteration = (iteration: number, maxIterations: number) => Promise<void>;
@@ -44,6 +45,15 @@ async function runAgentInvocation(
         ...options,
         model: node.model,
         modelReasoningEffort: node.options.modelReasoningEffort,
+      });
+      return agentRunResult;
+    }
+    case 'grok': {
+      const agentRunResult = await runGrokNode({
+        ...options,
+        model: node.model,
+        reasoningEffort: node.options.reasoningEffort,
+        maxTurns: node.options.maxTurns,
       });
       return agentRunResult;
     }

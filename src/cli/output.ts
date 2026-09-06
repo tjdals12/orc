@@ -324,6 +324,28 @@ export function formatNodeLogBody(logType: WorkflowRunNodeLogType, data: string)
       output satisfies never;
       throw new Error('Unknown codex output kind');
     }
+    if (output.provider === 'grok') {
+      if (output.kind === 'text') {
+        const body = `${symbols.agentText} ${sanitizeCapturedText(output.text)}`;
+        return body;
+      }
+      if (output.kind === 'tool_call') {
+        const toolName = sanitizeCapturedText(output.tool_name);
+        const toolKind = sanitizeCapturedText(output.tool_kind);
+        const body = `${symbols.agentToolUse} ${toolName} (${toolKind})`;
+        return body;
+      }
+      if (output.kind === 'tool_call_update') {
+        const toolName = sanitizeCapturedText(output.tool_name);
+        const outcome = output.status === 'failed' ? 'failed ' : '';
+        const preview = formatLogPreview(output.output_preview);
+        const body = `${symbols.agentToolResult} ${toolName} ${outcome}${preview}`;
+        return body;
+      }
+
+      output satisfies never;
+      throw new Error('Unknown grok output kind');
+    }
 
     output satisfies never;
     throw new Error('Unknown agent output provider');

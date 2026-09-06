@@ -8,13 +8,13 @@ import type {
   RegistrationStatus,
   SetupStatus,
 } from '#cli/doctor/handlers/doctor.handler.js';
-import type { ProviderAuth } from '#installation/provider/auth.js';
+import type { ProviderDoctorStatus } from '#installation/provider/auth.js';
 import type { SkillStatus } from '#project/skill.js';
 
-function measureLabelWidth(providerAuths: ProviderAuth[]): number {
+function measureLabelWidth(providerStatuses: ProviderDoctorStatus[]): number {
   const labels: string[] = ['Setup', 'Config', 'Status', 'Git', 'Workflows', 'Hooks', 'Skill'];
-  for (const auth of providerAuths) {
-    labels.push(auth.id);
+  for (const provider of providerStatuses) {
+    labels.push(provider.id);
   }
   const labelWidth = measureColumnWidth(labels);
   return labelWidth;
@@ -120,12 +120,60 @@ function renderConfigRow(
   printPathGuidance(configPath, labelWidth);
 }
 
-function renderProviderRow(auth: ProviderAuth, labelWidth: number): void {
-  const { status } = auth;
+function renderProviderRow(provider: ProviderDoctorStatus, labelWidth: number): void {
+  const { authStatus, cliStatus } = provider;
+  if (cliStatus?.status === 'not-found') {
+    printDoctorRow({
+      symbol: style.warn(symbols.warn),
+      label: provider.id,
+      value: style.muted('CLI not found'),
+      labelWidth,
+    });
+    printDetailLine(style.muted(cliStatus.installHint), labelWidth);
+    return;
+  }
+  if (cliStatus?.status === 'check-failed') {
+    printDoctorRow({
+      symbol: style.warn(symbols.warn),
+      label: provider.id,
+      value: style.muted('unable to check CLI'),
+      labelWidth,
+    });
+    printCommandGuidance(cliStatus.checkCommand, labelWidth);
+    return;
+  }
+  if (cliStatus?.status === 'unsupported') {
+    printDoctorRow({
+      symbol: style.warn(symbols.warn),
+      label: provider.id,
+      value: style.muted(`CLI not supported (supports ${cliStatus.supportedVersionRange})`),
+      labelWidth,
+    });
+    printCommandGuidance(cliStatus.updateCommand, labelWidth);
+    return;
+  }
+
+  const authDetail = authStatus.status === 'signed-in' ? 'signed in' : 'not signed in';
+  if (cliStatus?.status === 'may-be-incompatible') {
+    printDoctorRow({
+      symbol: style.warn(symbols.warn),
+      label: provider.id,
+      value: style.muted(
+        `${authDetail} · version may be incompatible (supports ${cliStatus.supportedVersionRange})`,
+      ),
+      labelWidth,
+    });
+    if (authStatus.status !== 'signed-in') {
+      printCommandGuidance(`orc auth login ${provider.id}`, labelWidth);
+    }
+    return;
+  }
+
+  const status = authStatus;
   if (status.status === 'signed-in') {
     printDoctorRow({
       symbol: style.success(symbols.ok),
-      label: auth.id,
+      label: provider.id,
       value: style.muted('signed in'),
       labelWidth,
     });
@@ -134,17 +182,17 @@ function renderProviderRow(auth: ProviderAuth, labelWidth: number): void {
   if (status.status === 'signed-out') {
     printDoctorRow({
       symbol: style.muted(symbols.pending),
-      label: auth.id,
+      label: provider.id,
       value: style.muted('not signed in'),
       labelWidth,
     });
-    printCommandGuidance(`orc auth login ${auth.id}`, labelWidth);
+    printCommandGuidance(`orc auth login ${provider.id}`, labelWidth);
     return;
   }
   if (status.status === 'cli-not-found') {
     printDoctorRow({
       symbol: style.warn(symbols.warn),
-      label: auth.id,
+      label: provider.id,
       value: style.muted('CLI not found'),
       labelWidth,
     });
@@ -154,11 +202,11 @@ function renderProviderRow(auth: ProviderAuth, labelWidth: number): void {
   if (status.status === 'check-failed') {
     printDoctorRow({
       symbol: style.warn(symbols.warn),
-      label: auth.id,
+      label: provider.id,
       value: style.muted('check failed'),
       labelWidth,
     });
-    printCommandGuidance(`orc auth login ${auth.id}`, labelWidth);
+    printCommandGuidance(`orc auth login ${provider.id}`, labelWidth);
     return;
   }
   status satisfies never;
@@ -295,12 +343,15 @@ function renderInstallationSection(
   renderConfigRow(installation.configCheck, installation.configPath, labelWidth);
 }
 
-function renderProvidersSection(providerAuths: ProviderAuth[], labelWidth: number): void {
+function renderProvidersSection(
+  providerStatuses: ProviderDoctorStatus[],
+  labelWidth: number,
+): void {
   console.log('');
   console.log(style.strong('Providers'));
 
-  for (const auth of providerAuths) {
-    renderProviderRow(auth, labelWidth);
+  for (const provider of providerStatuses) {
+    renderProviderRow(provider, labelWidth);
   }
 }
 
@@ -318,8 +369,8 @@ function renderProjectSection(project: DoctorResult['project'], labelWidth: numb
 }
 
 export function renderDoctorResult(result: DoctorResult): void {
-  const labelWidth = measureLabelWidth(result.installation.providerAuths);
+  const labelWidth = measureLabelWidth(result.installation.providerStatuses);
   renderInstallationSection(result.installation, labelWidth);
-  renderProvidersSection(result.installation.providerAuths, labelWidth);
+  renderProvidersSection(result.installation.providerStatuses, labelWidth);
   renderProjectSection(result.project, labelWidth);
 }

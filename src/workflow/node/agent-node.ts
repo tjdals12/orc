@@ -1,5 +1,6 @@
 import type { ClaudeAgentNode } from './claude-agent-node.js';
 import type { CodexAgentNode } from './codex-agent-node.js';
+import type { GrokAgentNode } from './grok-agent-node.js';
 import type { Loop } from './loop.js';
 import { WorkflowNodeBase } from './workflow-node.js';
 
@@ -48,7 +49,7 @@ export abstract class AgentNodeBase extends WorkflowNodeBase {
     return this._prompt;
   }
 
-  abstract get provider(): 'claude' | 'codex';
+  abstract get provider(): 'claude' | 'codex' | 'grok';
 }
 
-export type AgentNode = ClaudeAgentNode | CodexAgentNode;
+export type AgentNode = ClaudeAgentNode | CodexAgentNode | GrokAgentNode;
