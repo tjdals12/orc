@@ -21,6 +21,8 @@ type ClaudeCliProcessExit =
 
 type ClaudeCliResult = { subtype: string; isError: boolean; result: string; errors: string[] };
 
+const SIGINT_GRACE_MS = 5000;
+
 function buildClaudeCliArgs(options: {
   model: string;
   effort: string | null;
@@ -212,11 +214,25 @@ export async function runClaudeNode(options: {
     return { outcome: 'failed', reason: `Failed to spawn Claude: ${detail}` };
   }
 
-  ProcessGroupRegistry.register(child);
-  const stopOnAbort = (): void => {
-    ProcessGroupRegistry.stop(child);
+  let stopRequested = false;
+  let sigintGraceTimer: NodeJS.Timeout | null = null;
+  const stopClaudeCli = (): void => {
+    if (stopRequested) return;
+    stopRequested = true;
+
+    try {
+      child.kill('SIGINT');
+    } catch {
+      return;
+    }
+
+    sigintGraceTimer = setTimeout(() => {
+      ProcessGroupRegistry.stop(child);
+    }, SIGINT_GRACE_MS);
+    sigintGraceTimer.unref();
   };
-  abortSignal.addEventListener('abort', stopOnAbort, { once: true });
+  ProcessGroupRegistry.register(child);
+  abortSignal.addEventListener('abort', stopClaudeCli, { once: true });
 
   const exitReported = waitForClaudeCliExit(child);
   const stderrCollected = collectStderr(child.stderr);
@@ -324,7 +340,7 @@ export async function runClaudeNode(options: {
 
     return { outcome: 'failed', reason: buildFailureReason(resultMessage) };
   } catch (error) {
-    ProcessGroupRegistry.stop(child);
+    stopClaudeCli();
     await Promise.allSettled([exitReported, stderrCollected]);
     if (abortSignal.aborted) return { outcome: 'failed', reason: 'Aborted by cancellation' };
     if (error instanceof JsonLinesParseError) {
@@ -333,6 +349,7 @@ export async function runClaudeNode(options: {
     const detail = error instanceof Error ? error.message : util.inspect(error);
     return { outcome: 'failed', reason: `Claude failed: ${detail}` };
   } finally {
-    abortSignal.removeEventListener('abort', stopOnAbort);
+    abortSignal.removeEventListener('abort', stopClaudeCli);
+    if (sigintGraceTimer !== null) clearTimeout(sigintGraceTimer);
   }
 }
