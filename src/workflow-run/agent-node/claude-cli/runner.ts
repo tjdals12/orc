@@ -149,7 +149,7 @@ function buildFailureReason(result: ClaudeCliResult): string {
   return `The agent failed (${result.subtype})`;
 }
 
-export async function runClaudeCliNode(options: {
+export async function runClaudeNode(options: {
   model: string;
   effort: string | null;
   maxTurns: number | null;
