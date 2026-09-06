@@ -78,12 +78,13 @@ npm install -g @tjdals12/orc
 ### 사용할 에이전트의 CLI 설치
 
 워크플로우에서 사용할 각 에이전트의 CLI를 설치합니다.
-설치 방법은 각 provider의 문서를 확인하세요.
+설치 방법은 각 프로바이더의 문서를 확인하세요.
 
-| 에이전트   | CLI     | 지원 버전           |
-| ---------- | ------- | ------------------- |
-| Codex      | `codex` | `>=0.153.4, <1.0.0` |
-| Grok Build | `grok`  | `>=1.0.13, <2.0.0`  |
+| 에이전트    | CLI      | 지원 버전           |
+| ----------- | -------- | ------------------- |
+| Claude Code | `claude` | `>=2.1.261, <3.0.0` |
+| Codex       | `codex`  | `>=0.153.4, <1.0.0` |
+| Grok Build  | `grok`   | `>=1.0.13, <2.0.0`  |
 
 `orc doctor`로 필요한 CLI가 설치되어 있고 호환되는지 확인하세요.
 
@@ -108,6 +109,8 @@ orc auth login grok
 ```
 
 Claude Code, Codex, Grok Build가 이미 설치되어 있다면 `claude auth login`, `codex login`, `grok login`으로 로그인해도 됩니다.
+
+Claude Code는 orc와 별도로 설치합니다. 설치 방법은 [Claude Code](https://code.claude.com/docs/en/overview)에서 확인합니다. orc는 Claude Code `>=2.1.261, <3.0.0`을 지원합니다. 더 새로운 2.x 버전도 실행할 수 있지만, 호환되지 않을 수 있다는 경고를 `orc doctor`가 표시합니다.
 
 Grok Build는 orc와 별도로 설치합니다. 설치 방법은 [x.ai/cli](https://x.ai/cli)에서 확인합니다. orc는 Grok `>=1.0.13, <2.0.0`을 지원합니다. 더 새로운 Grok 버전도 실행할 수 있지만, 호환되지 않을 수 있다는 경고를 `orc doctor`가 표시합니다.
 

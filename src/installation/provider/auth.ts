@@ -1,5 +1,5 @@
-import { checkClaudeAuthStatus, signInToClaude, signOutFromClaude } from './claude-cli/auth.js';
-import { checkClaudeCliStatus } from './claude-cli/cli-status.js';
+import { checkClaudeAuthStatus, signInToClaude, signOutFromClaude } from './claude/auth.js';
+import { checkClaudeCliStatus } from './claude/cli-status.js';
 import { checkCodexAuthStatus, signInToCodex, signOutFromCodex } from './codex/auth.js';
 import { checkCodexCliStatus } from './codex/cli-status.js';
 import { checkGrokAuthStatus, signInToGrok, signOutFromGrok } from './grok/auth.js';
