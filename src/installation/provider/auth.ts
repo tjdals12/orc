@@ -1,4 +1,5 @@
-import { checkClaudeAuthStatus, signInToClaude, signOutFromClaude } from './claude.js';
+import { checkClaudeAuthStatus, signInToClaude, signOutFromClaude } from './claude/auth.js';
+import { checkClaudeCliStatus } from './claude/cli-status.js';
 import { checkCodexAuthStatus, signInToCodex, signOutFromCodex } from './codex/auth.js';
 import { checkCodexCliStatus } from './codex/cli-status.js';
 import { checkGrokAuthStatus, signInToGrok, signOutFromGrok } from './grok/auth.js';
@@ -42,7 +43,7 @@ const PROVIDERS: Provider[] = [
   {
     id: 'claude',
     checkAuthStatus: checkClaudeAuthStatus,
-    checkCliStatus: null,
+    checkCliStatus: checkClaudeCliStatus,
     signIn: signInToClaude,
     signOut: signOutFromClaude,
     signInNote: null,

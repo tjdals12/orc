@@ -356,12 +356,16 @@ orc doctor --json
         "id": "claude",
         "status": "signed-in",
         "method": "claude.ai",
-        "cli": null
+        "cli": {
+          "status": "available"
+        }
       },
       {
         "id": "codex",
         "status": "signed-out",
-        "cli": null
+        "cli": {
+          "status": "available"
+        }
       },
       {
         "id": "grok",
@@ -397,6 +401,6 @@ Report the items that are not ready as a short summary — here codex is signed
 out, the project is not registered, and the skill is not installed — then tell
 the user to run `orc doctor`, which prints the command that fixes each one. A
 `null` item means there was nothing to judge, not a failure. A provider's
-`cli` value is its local CLI readiness: Grok may report `not-found`,
+`cli` value is its local CLI readiness: Claude Code, Codex, or Grok may report `not-found`,
 `check-failed`, `unsupported`, or `may-be-incompatible`; use the doctor output
 and its guidance rather than claiming that the provider can run.

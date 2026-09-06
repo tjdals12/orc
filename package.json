@@ -101,10 +101,10 @@
     "@commitlint/cli": "^21.2.2",
     "@commitlint/config-conventional": "^21.2.2",
     "@eslint/js": "^10.0.1",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^26.2.0",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^26.2.0",
     "@types/picomatch": "^4.0.3",
     "eslint": "^10.9.0",
     "eslint-config-prettier": "^10.1.8",
@@ -117,7 +117,6 @@
     "typescript-eslint": "^8.67.0"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.241",
     "better-sqlite3": "^13.0.3",
     "commander": "^15.0.0",
     "kysely": "^0.29.5",
