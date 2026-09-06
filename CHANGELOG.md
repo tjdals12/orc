@@ -1,3 +1,9 @@
+# [1.1.0-next.3](https://github.com/tjdals12/orc/compare/v1.1.0-next.2...v1.1.0-next.3) (2026-09-06)
+
+### Features
+
+- use the local Claude CLI ([#4](https://github.com/tjdals12/orc/issues/4)) ([b43de03](https://github.com/tjdals12/orc/commit/b43de03ef36c1c241b65f8eabe8da47f1ed50db8))
+
 # [1.1.0-next.2](https://github.com/tjdals12/orc/compare/v1.1.0-next.1...v1.1.0-next.2) (2026-09-05)
 
 ### Features
