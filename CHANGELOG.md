@@ -1,3 +1,11 @@
+# [1.1.0](https://github.com/tjdals12/orc/compare/v1.0.0...v1.1.0) (2026-09-06)
+
+### Features
+
+- support Grok Build ([d521e8b](https://github.com/tjdals12/orc/commit/d521e8b6f9a3d48da4f4c714c68c30e1c39fb7ce))
+- use the local Claude CLI ([#4](https://github.com/tjdals12/orc/issues/4)) ([b43de03](https://github.com/tjdals12/orc/commit/b43de03ef36c1c241b65f8eabe8da47f1ed50db8))
+- use the local Codex CLI ([#3](https://github.com/tjdals12/orc/issues/3)) ([9aa1bc5](https://github.com/tjdals12/orc/commit/9aa1bc569da0ad1f6c6550f10d0231d1d1106cc4))
+
 # [1.1.0-next.3](https://github.com/tjdals12/orc/compare/v1.1.0-next.2...v1.1.0-next.3) (2026-09-06)
 
 ### Features
