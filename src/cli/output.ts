@@ -241,6 +241,7 @@ export function eventGutterColor(type: WorkflowRunEventType): (text: string) => 
   switch (type) {
     case 'run_started':
     case 'run_resumed':
+    case 'run_stop_requested':
     case 'agent_session_started':
     case 'iteration_started':
     case 'iteration_completed':
@@ -258,9 +259,12 @@ export function eventGutterColor(type: WorkflowRunEventType): (text: string) => 
     case 'decision_approved':
       return style.success;
     case 'run_failed':
+    case 'run_stop_failed':
     case 'node_failed':
       return style.error;
     case 'run_cancelled':
+    case 'run_stopped':
+    case 'node_stopped':
     case 'decision_rejected':
       return style.muted;
   }
