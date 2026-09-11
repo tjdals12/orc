@@ -194,9 +194,32 @@ export function renderWorkflowStatusResult(workflowStatusResult: WorkflowStatusR
   const failureReasonByNodeId = collectNodeFailureReason(events);
   renderNodesSection(nodes, failureReasonByNodeId);
   renderEventsSection(workflowRunId, events);
-  if (runIsDead) {
+
+  const hasInterruptedProcessGroup = nodes.some(
+    (node) => node.status === 'running' && node.pgid !== null,
+  );
+  const deadRunNeedsStop = runIsDead && hasInterruptedProcessGroup;
+  const stopNeedsRetry = status === 'stop_failed' || (status === 'stopping' && runIsDead);
+
+  if (deadRunNeedsStop || stopNeedsRetry) {
+    renderStopHint(workflowRunId);
+    return;
+  }
+
+  const stoppedRunCanResume = status === 'stopped';
+  const legacyDeadRunCanResume = status === 'running' && runIsDead && !hasInterruptedProcessGroup;
+  if (stoppedRunCanResume || legacyDeadRunCanResume) {
     renderResumeHint(workflowRunId);
   }
+}
+
+function renderStopHint(workflowRunId: string): void {
+  if (!process.stdout.isTTY) {
+    return;
+  }
+  console.log('');
+  console.log(style.strong('Stop'));
+  console.log(`  ${style.ident(`workflow stop ${workflowRunId}`)}`);
 }
 
 function renderResumeHint(workflowRunId: string): void {

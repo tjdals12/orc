@@ -207,7 +207,7 @@ export class WorkflowResumeHandler {
       const liveness = resolveWorkflowRunLiveness(workflowRun);
       if (liveness === 'alive') {
         throw new WorkflowRunError(
-          `Workflow run ${workflowRun.id} is still running. Run "orc workflow cancel ${workflowRun.id}" to stop it, or wait for it to finish.`,
+          `Workflow run ${workflowRun.id} is still running. Run "orc workflow stop ${workflowRun.id}" to stop it resumably, or wait for it to finish.`,
         );
       }
     }
