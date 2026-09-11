@@ -14,7 +14,7 @@ function hasProcess(pid: number): boolean {
 }
 
 export function resolveWorkflowRunLiveness(workflowRun: WorkflowRun): WorkflowRunLiveness {
-  if (workflowRun.status !== 'running') {
+  if (workflowRun.status !== 'running' && workflowRun.status !== 'stopping') {
     return 'inactive';
   }
 

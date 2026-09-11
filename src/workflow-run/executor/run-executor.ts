@@ -1,11 +1,10 @@
 import util from 'node:util';
 
-import { discardGitChanges } from '#shared/git.js';
 import type { Workflow } from '#workflow/workflow.js';
 
-import { discardNodeArtifacts } from '../artifacts.js';
 import type { WorkflowRunRecorder } from '../recorder.js';
 import type { WorkflowRun, WorkflowRunNode } from '../repository.js';
+import { cleanupStoppedRun } from '../stop-cleanup.js';
 
 import { WorkflowRunControlWatch } from './run-control-watch.js';
 import { WorkflowRunNodeExecutor } from './node-executor.js';
@@ -56,6 +55,26 @@ export class WorkflowRunExecutor {
 
     const started = await this.startRun(workflowRun);
     if (!started) {
+      const state = await this._checkWorkflowRunState();
+      if (state === 'stopping') {
+        await this._workflowRunRecorder.recordEvent({ type: 'run_stop_requested' });
+        try {
+          const warning = await cleanupStoppedRun({
+            cwd,
+            artifactsDirPath,
+            workflowNodes: workflow.nodes,
+            interruptedNodeIds: [],
+          });
+          await this._workflowRunStateWriter.markRunStopped(workflowRun.id, []);
+          await this._workflowRunRecorder.recordEvent({ type: 'run_stopped', warning });
+          return { outcome: 'stopped', nodeIds: [], warning };
+        } catch (e) {
+          const reason = e instanceof Error ? e.message : util.inspect(e);
+          await this._workflowRunStateWriter.markRunStopFailed(workflowRun.id);
+          await this._workflowRunRecorder.recordEvent({ type: 'run_stop_failed', reason });
+          return { outcome: 'stop-failed', reason };
+        }
+      }
       await this.cancelRun(workflowRun);
       const workflowExecutionResult: WorkflowExecutionResult = {
         outcome: 'cancelled',
@@ -65,7 +84,7 @@ export class WorkflowRunExecutor {
 
     let firstFailure: { nodeId: string; reason: string } | null = null;
     let firstUnexpectedError: { error: unknown } | null = null;
-    const stoppedNodeIds: string[] = [];
+    const interruptedNodeIds: string[] = [];
 
     const pendingApprovals: PendingApproval[] = [];
     for (const workflowRunNode of workflowRunNodes) {
@@ -140,7 +159,7 @@ export class WorkflowRunExecutor {
           }
           scheduler.stopLaunching();
         } else if (finishedNode.outcome === 'stopped') {
-          stoppedNodeIds.push(finishedNode.nodeId);
+          interruptedNodeIds.push(finishedNode.nodeId);
           scheduler.stopLaunching();
         } else if (finishedNode.outcome === 'errored') {
           if (firstUnexpectedError === null) {
@@ -173,31 +192,28 @@ export class WorkflowRunExecutor {
     if (runControlWatch.isStopRequested()) {
       await this._workflowRunRecorder.recordEvent({ type: 'run_stop_requested' });
       try {
-        const gitCleanup = await discardGitChanges(cwd);
-        discardNodeArtifacts(artifactsDirPath, workflow.nodes, stoppedNodeIds);
+        const warning = await cleanupStoppedRun({
+          cwd,
+          artifactsDirPath,
+          workflowNodes: workflow.nodes,
+          interruptedNodeIds,
+        });
 
-        const stoppedNodes = workflowRunNodes.filter((node) =>
-          stoppedNodeIds.includes(node.node_id),
+        const interruptedNodes = workflowRunNodes.filter((node) =>
+          interruptedNodeIds.includes(node.node_id),
         );
-        await this._workflowRunStateWriter.markRunStopped(workflowRun.id, stoppedNodes);
+        await this._workflowRunStateWriter.markRunStopped(workflowRun.id, interruptedNodes);
 
-        for (const stoppedNode of stoppedNodes) {
+        for (const interruptedNode of interruptedNodes) {
           await this._workflowRunRecorder.recordEvent({
             type: 'node_stopped',
-            nodeId: stoppedNode.node_id,
+            nodeId: interruptedNode.node_id,
           });
         }
 
-        let warning: string | null = null;
-        if (gitCleanup.outcome === 'skipped') {
-          warning =
-            gitCleanup.reason === 'not-git'
-              ? 'Filesystem changes were preserved because the execution environment is not a Git worktree.'
-              : 'Filesystem changes were preserved because the Git worktree has no HEAD commit.';
-        }
         await this._workflowRunRecorder.recordEvent({ type: 'run_stopped', warning });
 
-        return { outcome: 'stopped', nodeIds: stoppedNodeIds, warning };
+        return { outcome: 'stopped', nodeIds: interruptedNodeIds, warning };
       } catch (e) {
         const reason = e instanceof Error ? e.message : util.inspect(e);
         await this._workflowRunStateWriter.markRunStopFailed(workflowRun.id);

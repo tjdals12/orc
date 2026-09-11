@@ -15,7 +15,9 @@ import { workflowStatusCommand } from './workflow-status.command.js';
 import { workflowRunsCommand } from './workflow-runs.command.js';
 import { workflowPruneCommand } from './workflow-prune.command.js';
 import { workflowCancelCommand } from './workflow-cancel.command.js';
+import { workflowStopCommand } from './workflow-stop.command.js';
 import { workflowWorkerCommand } from './workflow-worker.command.js';
+import { workflowStopFinalizerCommand } from './workflow-stop-finalizer.command.js';
 
 export const workflowCommand = new Command('workflow').description('Manage and run workflows');
 
@@ -33,5 +35,7 @@ workflowCommand.addCommand(workflowStreamCommand);
 workflowCommand.addCommand(workflowStatusCommand);
 workflowCommand.addCommand(workflowRunsCommand);
 workflowCommand.addCommand(workflowCancelCommand);
+workflowCommand.addCommand(workflowStopCommand);
 workflowCommand.addCommand(workflowPruneCommand);
 workflowCommand.addCommand(workflowWorkerCommand, { hidden: true });
+workflowCommand.addCommand(workflowStopFinalizerCommand, { hidden: true });

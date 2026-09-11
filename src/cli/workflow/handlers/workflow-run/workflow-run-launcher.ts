@@ -39,14 +39,26 @@ export class WorkflowRunLauncher {
   }
 
   spawnWorker(workflowRunId: string): number {
+    return this.spawnDetachedCommand('__worker', workflowRunId, 'workflow run worker');
+  }
+
+  spawnStopFinalizer(workflowRunId: string): number {
+    return this.spawnDetachedCommand('__stop-finalizer', workflowRunId, 'workflow stop finalizer');
+  }
+
+  private spawnDetachedCommand(
+    command: string,
+    workflowRunId: string,
+    processName: string,
+  ): number {
     const entryPath = process.argv[1];
     if (entryPath === undefined) {
-      throw new WorkflowRunError('Failed to resolve the CLI entry point for the worker.');
+      throw new WorkflowRunError(`Failed to resolve the CLI entry point for the ${processName}.`);
     }
 
     const child = spawn(
       process.execPath,
-      [...process.execArgv, entryPath, 'workflow', '__worker', workflowRunId],
+      [...process.execArgv, entryPath, 'workflow', command, workflowRunId],
       {
         detached: true,
         stdio: 'ignore',
@@ -56,7 +68,7 @@ export class WorkflowRunLauncher {
 
     const workerPid = child.pid;
     if (workerPid === undefined) {
-      throw new WorkflowRunError('Failed to start the workflow run worker.');
+      throw new WorkflowRunError(`Failed to start the ${processName}.`);
     }
     return workerPid;
   }
