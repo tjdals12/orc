@@ -108,7 +108,7 @@ export class WorkflowRunStateWriter {
             workflowRunId: workflowRunNode.workflow_run_id,
             status: 'running',
           },
-          { status: 'stopped', finished_at: finishedAt },
+          { status: 'stopped', pgid: null, finished_at: finishedAt },
           { transaction },
         );
         if (!nodeStopped) {

@@ -5,6 +5,7 @@ import type { Kysely } from 'kysely';
 
 import type { Database } from '#database/schema.js';
 import { ExecutionEnvironmentRepository } from '#execution-environment/repository.js';
+import { ProcessGroupRegistry } from '#shared/process-group-registry.js';
 import { cleanupStoppedRun } from '#workflow-run/stop-cleanup.js';
 import { resolveWorkflowRunLiveness } from '#workflow-run/liveness.js';
 import { WorkflowRunNodeRepository, WorkflowRunRepository } from '#workflow-run/repository.js';
@@ -72,6 +73,14 @@ export class WorkflowStopFinalizerHandler {
         workflowRun.id,
       );
       const interruptedNodes = workflowRunNodes.filter((node) => node.status === 'running');
+      for (const interruptedNode of interruptedNodes) {
+        if (interruptedNode.pgid === null) {
+          throw new Error(
+            `Workflow run node ${interruptedNode.node_id} has no recorded process group to stop.`,
+          );
+        }
+        await ProcessGroupRegistry.stopGroup(interruptedNode.pgid);
+      }
       const warning = await cleanupStoppedRun({
         cwd: executionEnvironment.path,
         artifactsDirPath,
