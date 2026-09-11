@@ -28,6 +28,8 @@ function nodeStatusColor(status: WorkflowRunNodeStatus): (text: string) => strin
       return style.muted;
     case 'running':
       return style.ident;
+    case 'stopped':
+      return style.muted;
     case 'awaiting_decision':
       return style.warn;
     case 'rejected':
@@ -45,6 +47,8 @@ function nodeStatusSymbol(status: WorkflowRunNodeStatus): string {
       return symbols.pending;
     case 'running':
       return symbols.running;
+    case 'stopped':
+      return symbols.pending;
     case 'awaiting_decision':
       return symbols.warn;
     case 'rejected':

@@ -15,7 +15,15 @@ export type ExecutionEnvironmentsTable = {
 };
 
 export type WorkflowRunStatus =
-  'pending' | 'running' | 'paused' | 'succeeded' | 'failed' | 'cancelled';
+  | 'pending'
+  | 'running'
+  | 'stopping'
+  | 'stopped'
+  | 'stop_failed'
+  | 'paused'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
 export type WorkflowRunsTable = {
   id: string;
   project_id: string;
@@ -30,7 +38,7 @@ export type WorkflowRunsTable = {
 };
 
 export type WorkflowRunNodeStatus =
-  'pending' | 'running' | 'awaiting_decision' | 'rejected' | 'succeeded' | 'failed';
+  'pending' | 'running' | 'stopped' | 'awaiting_decision' | 'rejected' | 'succeeded' | 'failed';
 export type WorkflowRunNodesTable = {
   id: string;
   workflow_run_id: string;

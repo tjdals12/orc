@@ -360,7 +360,12 @@ export function runStatusColor(status: WorkflowRunStatus): (text: string) => str
     case 'pending':
       return style.muted;
     case 'running':
+    case 'stopping':
       return style.ident;
+    case 'stopped':
+      return style.muted;
+    case 'stop_failed':
+      return style.error;
     case 'paused':
       return style.warn;
     case 'succeeded':
