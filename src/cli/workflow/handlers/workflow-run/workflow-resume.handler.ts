@@ -99,6 +99,14 @@ export class WorkflowResumeHandler {
     const workflowRunNodes = await this._workflowRunNodeRepository.findManyByWorkflowRunId(
       workflowRun.id,
     );
+    const hasInterruptedProcessGroup = workflowRunNodes.some(
+      (node) => node.status === 'running' && node.pgid !== null,
+    );
+    if (workflowRun.status === 'running' && hasInterruptedProcessGroup) {
+      throw new WorkflowRunError(
+        `Workflow run ${workflowRun.id} has interrupted process groups. Run "orc workflow stop ${workflowRun.id}" before resuming it.`,
+      );
+    }
     const remainingNodes = workflowRunNodes.filter((node) => node.status !== 'succeeded');
 
     const workflowDeclaresArtifacts = workflow.declaresArtifacts();
@@ -180,6 +188,16 @@ export class WorkflowResumeHandler {
         `Workflow run ${workflowRun.id} was cancelled. Start a new run instead.`,
       );
     }
+    if (workflowRun.status === 'stopping') {
+      throw new WorkflowRunError(
+        `Workflow run ${workflowRun.id} is still stopping. Wait for it to become stopped before resuming it.`,
+      );
+    }
+    if (workflowRun.status === 'stop_failed') {
+      throw new WorkflowRunError(
+        `Workflow run ${workflowRun.id} could not be stopped safely. Retry "orc workflow stop ${workflowRun.id}" before resuming it.`,
+      );
+    }
     if (workflowRun.status === 'pending') {
       throw new WorkflowRunError(
         `Workflow run ${workflowRun.id} has not started. It may still be provisioning — check "orc workflow status ${workflowRun.id}".`,
@@ -193,7 +211,7 @@ export class WorkflowResumeHandler {
         );
       }
     }
-    if (workflowRun.started_at === null) {
+    if (workflowRun.started_at === null && workflowRun.status !== 'stopped') {
       throw new WorkflowRunError(
         `Workflow run ${workflowRun.id} failed during provisioning. Start a new run instead.`,
       );
@@ -261,6 +279,7 @@ export class WorkflowResumeHandler {
           {
             status: 'pending',
             attempt: workflowRunNode.attempt + 1,
+            pgid: null,
             reason: null,
             started_at: null,
             finished_at: null,
