@@ -6,12 +6,14 @@ export type WorkflowExecutionResult =
   | { outcome: 'succeeded'; nodeCount: number; elapsedSeconds: number }
   | { outcome: 'failed'; nodeId: string; reason: string }
   | { outcome: 'paused'; approvals: PendingApproval[] }
+  | { outcome: 'stopped'; nodeIds: string[] }
   | { outcome: 'cancelled' };
 
 export type FinishedNode =
   | { outcome: 'succeeded'; nodeId: string }
   | { outcome: 'awaiting-decision'; nodeId: string; message: string }
   | { outcome: 'failed'; nodeId: string; reason: string }
+  | { outcome: 'stopped'; nodeId: string }
   | { outcome: 'errored'; nodeId: string; error: unknown };
 
 export type WorkflowRunExecutionState = 'running' | 'stopping' | 'cancelled' | 'deleted';
@@ -31,6 +33,9 @@ export type WorkflowRunNodeStateWriter = {
   markNodeFailed: (
     workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
   ) => Promise<void>;
+  markNodeStopped: (
+    workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
+  ) => Promise<boolean>;
   markNodeAwaitingDecision: (
     workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
     message: string,

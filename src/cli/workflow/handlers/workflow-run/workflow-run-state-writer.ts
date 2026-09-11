@@ -123,6 +123,23 @@ export class WorkflowRunStateWriter {
     );
   }
 
+  async markNodeStopped(
+    workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
+  ): Promise<boolean> {
+    const stopped = await this._workflowRunNodeRepository.update(
+      {
+        id: workflowRunNode.id,
+        workflowRunId: workflowRunNode.workflow_run_id,
+        status: 'running',
+      },
+      {
+        status: 'stopped',
+        finished_at: new Date().toISOString(),
+      },
+    );
+    return stopped;
+  }
+
   async markNodeAwaitingDecision(
     workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
     message: string,

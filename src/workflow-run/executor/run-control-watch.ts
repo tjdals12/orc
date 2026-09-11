@@ -1,5 +1,7 @@
 import type { WorkflowRunExecutionState } from './types.js';
 
+export const WORKFLOW_RUN_STOP_ABORT_REASON = 'workflow-run-stop-requested';
+
 export class WorkflowRunControlWatch {
   private readonly _abortController = new AbortController();
   private _poll: NodeJS.Timeout | null = null;
@@ -64,7 +66,7 @@ export class WorkflowRunControlWatch {
       }
       if (state === 'stopping') {
         this._stopRequested = true;
-        this._abortController.abort();
+        this._abortController.abort(WORKFLOW_RUN_STOP_ABORT_REASON);
       }
     } catch (e) {
       if (this._unexpectedError === null) {

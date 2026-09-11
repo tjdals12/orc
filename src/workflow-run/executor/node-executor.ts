@@ -10,6 +10,7 @@ import type { WorkflowRunRecorder } from '../recorder.js';
 import type { WorkflowRunNode } from '../repository.js';
 import type { ApprovalNodeRunResult, NodeRunResult } from '../types.js';
 import type { FinishedNode, WorkflowRunNodeStateWriter } from './types.js';
+import { WORKFLOW_RUN_STOP_ABORT_REASON } from './run-control-watch.js';
 import type { ApprovalNode } from '#workflow/node/approval-node.js';
 import {
   collectArtifactNames,
@@ -68,6 +69,9 @@ export class WorkflowRunNodeExecutor {
       if (workflowRunNode.status === 'rejected') {
         const onRejectRunResult = await this.executeOnReject(workflowNode, workflowRunNode);
         if (onRejectRunResult.outcome === 'failed') {
+          if (this.isStopRequested()) {
+            return { outcome: 'stopped', nodeId: workflowRunNode.node_id };
+          }
           await this.failNode(workflowRunNode, onRejectRunResult.reason);
 
           const finishedNode: FinishedNode = {
@@ -104,6 +108,9 @@ export class WorkflowRunNodeExecutor {
     const nodeRunResult = await this.executeWorkflowNode(workflowNode);
 
     if (nodeRunResult.outcome === 'failed') {
+      if (this.isStopRequested()) {
+        return { outcome: 'stopped', nodeId: workflowRunNode.node_id };
+      }
       await this.failNode(workflowRunNode, nodeRunResult.reason);
 
       const finishedNode: FinishedNode = {
@@ -363,6 +370,10 @@ export class WorkflowRunNodeExecutor {
       artifactTextByName.set(artifactName, artifactText);
     }
     return artifactTextByName;
+  }
+
+  private isStopRequested(): boolean {
+    return this._signal.aborted && this._signal.reason === WORKFLOW_RUN_STOP_ABORT_REASON;
   }
 
   private async startNode(workflowRunNode: WorkflowRunNode): Promise<void> {

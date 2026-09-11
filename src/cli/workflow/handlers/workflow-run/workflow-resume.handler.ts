@@ -167,6 +167,7 @@ export class WorkflowResumeHandler {
       case 'executed':
         return (
           result.outcome.execution.outcome === 'failed' ||
+          result.outcome.execution.outcome === 'stopped' ||
           result.outcome.execution.outcome === 'cancelled'
         );
     }

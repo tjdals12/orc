@@ -61,6 +61,7 @@ export class WorkflowRunExecutor {
 
     let firstFailure: { nodeId: string; reason: string } | null = null;
     let firstUnexpectedError: { error: unknown } | null = null;
+    const stoppedNodeIds: string[] = [];
 
     const pendingApprovals: PendingApproval[] = [];
     for (const workflowRunNode of workflowRunNodes) {
@@ -134,6 +135,9 @@ export class WorkflowRunExecutor {
             firstFailure = { nodeId: finishedNode.nodeId, reason: finishedNode.reason };
           }
           scheduler.stopLaunching();
+        } else if (finishedNode.outcome === 'stopped') {
+          stoppedNodeIds.push(finishedNode.nodeId);
+          scheduler.stopLaunching();
         } else if (finishedNode.outcome === 'errored') {
           if (firstUnexpectedError === null) {
             firstUnexpectedError = { error: finishedNode.error };
@@ -158,6 +162,15 @@ export class WorkflowRunExecutor {
       await this.cancelRun(workflowRun);
       const workflowExecutionResult: WorkflowExecutionResult = {
         outcome: 'cancelled',
+      };
+      return workflowExecutionResult;
+    }
+
+    if (runControlWatch.isStopRequested()) {
+      await this._workflowRunRecorder.recordEvent({ type: 'run_stop_requested' });
+      const workflowExecutionResult: WorkflowExecutionResult = {
+        outcome: 'stopped',
+        nodeIds: stoppedNodeIds,
       };
       return workflowExecutionResult;
     }
