@@ -75,9 +75,7 @@ export class WorkflowStopFinalizerHandler {
       const interruptedNodes = workflowRunNodes.filter((node) => node.status === 'running');
       for (const interruptedNode of interruptedNodes) {
         if (interruptedNode.pgid === null) {
-          throw new Error(
-            `Workflow run node ${interruptedNode.node_id} has no recorded process group to stop.`,
-          );
+          continue;
         }
         await ProcessGroupRegistry.stopGroup(interruptedNode.pgid);
       }
