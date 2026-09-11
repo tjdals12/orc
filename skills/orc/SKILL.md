@@ -125,9 +125,10 @@ own git worktree. Run `orc` from the project root.
    ```
 
    Tell the user `run.status`. When it is `paused`, the run is waiting on an
-   approval request — go to **Handle an approval request**. When it is neither
-   `succeeded` nor `paused`, name the node whose `status` is `failed` and give
-   the reason from the last entry in `events`.
+   approval request — go to **Handle an approval request**. A `stopped` run can
+   be resumed. When it is `stop_failed`, give the reason from the last entry in
+   `events` and tell the user to run `stop` again before resuming. When it is
+   `failed`, name the failed node and give its reason from `events`.
 
 **Guardrails**
 
@@ -153,15 +154,25 @@ own git worktree. Run `orc` from the project root.
 
 | To act                                    | Run                                                 |
 | ----------------------------------------- | --------------------------------------------------- |
-| Stop a run                                | `orc workflow cancel <run-id>`                      |
+| Stop a run and keep it resumable          | `orc workflow stop <run-id>`                        |
+| Cancel a run permanently                  | `orc workflow cancel <run-id>`                      |
 | Continue a stopped run                    | `orc workflow resume <run-id> [--detach]`           |
 | Approve an approval request               | `orc workflow approve <run-id> <node-id>`           |
 | Reject an approval request                | `orc workflow reject <run-id> <node-id> [--reason]` |
 | Delete a run with its worktree and branch | `orc workflow prune <run-id>`                       |
 
-Add `--json` to any command above except `cancel` and `prune`. `resume` prints
-the same document as `run`; `approve` and `reject` print the decision. A
-resumed run keeps its original input and re-runs only what did not finish.
+Add `--json` to any command above except `cancel` and `prune`. `stop` returns
+after the run becomes `stopping`; follow it until `stopped` or `stop_failed`.
+`resume` prints the same document as `run`; `approve` and `reject` print the
+decision. A resumed run keeps its original input and re-runs only what did not
+finish.
+
+Use `stop` only when the user wants to continue the same run later. In a Git
+repository, it resets tracked files to `HEAD` and deletes ordinary untracked
+files while preserving commits and ignored files. This includes in-place runs,
+where pre-existing uncommitted work can be lost. Outside a Git repository, it
+preserves project files. In both cases, artifacts declared by interrupted nodes
+are discarded. Use `cancel` when the user wants to end the run permanently.
 
 ## Handle an approval request
 
