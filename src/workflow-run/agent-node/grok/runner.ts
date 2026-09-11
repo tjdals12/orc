@@ -4,7 +4,7 @@ import type { Readable } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
 import util from 'node:util';
 
-import { ProcessGroupRegistry } from '#shared/process-group-registry.js';
+import { ProcessGroupRegistry, type ProcessGroupObserver } from '#shared/process-group-registry.js';
 import { buildPreview, collapseWhitespace } from '#shared/text.js';
 import { checkGrokCliCompatibility } from '#installation/provider/grok/version-check.js';
 
@@ -105,6 +105,7 @@ export async function runGrokNode(options: {
   recordOutput: RecordAgentOutput;
   recordSession: RecordAgentSession;
   abortSignal: AbortSignal;
+  processGroupObserver: ProcessGroupObserver;
 }): Promise<AgentRunResult> {
   const {
     model,
@@ -116,6 +117,7 @@ export async function runGrokNode(options: {
     recordOutput,
     recordSession,
     abortSignal,
+    processGroupObserver,
   } = options;
 
   const compatibility = await checkGrokCliCompatibility();
@@ -172,6 +174,8 @@ export async function runGrokNode(options: {
   }
 
   ProcessGroupRegistry.register(child);
+  const pgid = child.pid;
+  let pgidRecorded = false;
   const stopOnAbort = (): void => {
     ProcessGroupRegistry.stop(child);
   };
@@ -208,6 +212,10 @@ export async function runGrokNode(options: {
   const stderrCollected = collectStderr(child.stderr);
 
   try {
+    if (pgid !== undefined) {
+      await processGroupObserver.onProcessGroupStarted(pgid);
+      pgidRecorded = true;
+    }
     const events = parseJsonLines(child.stdout);
 
     for await (const value of events) {
@@ -347,5 +355,8 @@ export async function runGrokNode(options: {
     return agentRunResult;
   } finally {
     abortSignal.removeEventListener('abort', stopOnAbort);
+    if (pgid !== undefined && pgidRecorded) {
+      await processGroupObserver.onProcessGroupStopped(pgid);
+    }
   }
 }

@@ -1,5 +1,10 @@
 import type { ChildProcess } from 'node:child_process';
 
+export type ProcessGroupObserver = {
+  onProcessGroupStarted: (pgid: number) => Promise<void>;
+  onProcessGroupStopped: (pgid: number) => Promise<void>;
+};
+
 export class ProcessGroupRegistry {
   private static readonly _children = new Set<ChildProcess>();
 

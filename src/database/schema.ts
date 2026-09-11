@@ -46,6 +46,7 @@ export type WorkflowRunNodesTable = {
   position: number;
   status: WorkflowRunNodeStatus;
   attempt: number;
+  pgid: number | null;
   message: string | null;
   reason: string | null;
   started_at: string | null;

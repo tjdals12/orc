@@ -48,6 +48,7 @@ type WorkflowRunNodeMatch = {
   id: string;
   workflowRunId: string;
   status?: WorkflowRunNodeStatusMatch;
+  pgid?: number | null;
 };
 
 export class WorkflowRunRepository {
@@ -209,6 +210,7 @@ export class WorkflowRunNodeRepository {
         position,
         status: 'pending',
         attempt: 1,
+        pgid: null,
         message: null,
         reason: null,
         started_at: null,
@@ -235,6 +237,12 @@ export class WorkflowRunNodeRepository {
         typeof where.status === 'string'
           ? query.where('status', '=', where.status)
           : query.where('status', 'in', where.status.in);
+    }
+    if (where.pgid !== undefined) {
+      query =
+        where.pgid === null
+          ? query.where('pgid', 'is', null)
+          : query.where('pgid', '=', where.pgid);
     }
     const result = await query.executeTakeFirst();
     const updated = result.numUpdatedRows > 0n;

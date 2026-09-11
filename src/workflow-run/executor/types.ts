@@ -46,4 +46,12 @@ export type WorkflowRunNodeStateWriter = {
   markNodeSucceeded: (
     workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
   ) => Promise<void>;
+  markNodeProcessGroupStarted: (
+    workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
+    pgid: number,
+  ) => Promise<void>;
+  markNodeProcessGroupStopped: (
+    workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
+    pgid: number,
+  ) => Promise<void>;
 };

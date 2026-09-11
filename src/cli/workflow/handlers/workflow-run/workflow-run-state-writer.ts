@@ -198,4 +198,44 @@ export class WorkflowRunStateWriter {
       },
     );
   }
+
+  async markNodeProcessGroupStarted(
+    workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
+    pgid: number,
+  ): Promise<void> {
+    const recorded = await this._workflowRunNodeRepository.update(
+      {
+        id: workflowRunNode.id,
+        workflowRunId: workflowRunNode.workflow_run_id,
+        status: 'running',
+        pgid: null,
+      },
+      { pgid },
+    );
+    if (!recorded) {
+      throw new Error(
+        `Workflow run node ${workflowRunNode.id} cannot record process group ${pgid}.`,
+      );
+    }
+  }
+
+  async markNodeProcessGroupStopped(
+    workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
+    pgid: number,
+  ): Promise<void> {
+    const cleared = await this._workflowRunNodeRepository.update(
+      {
+        id: workflowRunNode.id,
+        workflowRunId: workflowRunNode.workflow_run_id,
+        status: 'running',
+        pgid,
+      },
+      { pgid: null },
+    );
+    if (!cleared) {
+      throw new Error(
+        `Workflow run node ${workflowRunNode.id} cannot clear process group ${pgid}.`,
+      );
+    }
+  }
 }

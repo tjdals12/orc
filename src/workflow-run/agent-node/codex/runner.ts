@@ -4,7 +4,7 @@ import type { Readable, Writable } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
 import util from 'node:util';
 
-import { ProcessGroupRegistry } from '#shared/process-group-registry.js';
+import { ProcessGroupRegistry, type ProcessGroupObserver } from '#shared/process-group-registry.js';
 import { buildPreview, collapseWhitespace, splitTextLines } from '#shared/text.js';
 import { checkCodexCliCompatibility } from '#installation/provider/codex/version-check.js';
 
@@ -122,6 +122,7 @@ export async function runCodexNode(options: {
   recordOutput: RecordAgentOutput;
   recordSession: RecordAgentSession;
   abortSignal: AbortSignal;
+  processGroupObserver: ProcessGroupObserver;
 }): Promise<AgentRunResult> {
   const {
     model,
@@ -132,6 +133,7 @@ export async function runCodexNode(options: {
     recordOutput,
     recordSession,
     abortSignal,
+    processGroupObserver,
   } = options;
 
   const compatibility = await checkCodexCliCompatibility();
@@ -193,6 +195,8 @@ export async function runCodexNode(options: {
     sigintGraceTimer.unref();
   };
   ProcessGroupRegistry.register(child);
+  const pgid = child.pid;
+  let pgidRecorded = false;
   abortSignal.addEventListener('abort', stopCodexCli, { once: true });
 
   const exitReported = waitForCodexCliExit(child);
@@ -203,6 +207,10 @@ export async function runCodexNode(options: {
   let invalidEvent: { type: string | null } | null = null;
 
   try {
+    if (pgid !== undefined) {
+      await processGroupObserver.onProcessGroupStarted(pgid);
+      pgidRecorded = true;
+    }
     await waitForCodexCliSpawn(child);
     await writePrompt(child.stdin, prompt);
 
@@ -304,5 +312,8 @@ export async function runCodexNode(options: {
   } finally {
     abortSignal.removeEventListener('abort', stopCodexCli);
     if (sigintGraceTimer !== null) clearTimeout(sigintGraceTimer);
+    if (pgid !== undefined && pgidRecorded) {
+      await processGroupObserver.onProcessGroupStopped(pgid);
+    }
   }
 }

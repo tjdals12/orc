@@ -5,7 +5,7 @@ import { StringDecoder } from 'node:string_decoder';
 import util from 'node:util';
 
 import { checkClaudeCliCompatibility } from '#installation/provider/claude/version-check.js';
-import { ProcessGroupRegistry } from '#shared/process-group-registry.js';
+import { ProcessGroupRegistry, type ProcessGroupObserver } from '#shared/process-group-registry.js';
 import { buildPreview, collapseWhitespace, splitTextLines } from '#shared/text.js';
 
 import { detectCompletionSignal } from '../completion-signal.js';
@@ -161,6 +161,7 @@ export async function runClaudeNode(options: {
   recordOutput: RecordAgentOutput;
   recordSession: RecordAgentSession;
   abortSignal: AbortSignal;
+  processGroupObserver: ProcessGroupObserver;
 }): Promise<AgentRunResult> {
   const {
     model,
@@ -172,6 +173,7 @@ export async function runClaudeNode(options: {
     recordOutput,
     recordSession,
     abortSignal,
+    processGroupObserver,
   } = options;
 
   const compatibility = await checkClaudeCliCompatibility();
@@ -232,6 +234,8 @@ export async function runClaudeNode(options: {
     sigintGraceTimer.unref();
   };
   ProcessGroupRegistry.register(child);
+  const pgid = child.pid;
+  let pgidRecorded = false;
   abortSignal.addEventListener('abort', stopClaudeCli, { once: true });
 
   const exitReported = waitForClaudeCliExit(child);
@@ -251,6 +255,10 @@ export async function runClaudeNode(options: {
   };
 
   try {
+    if (pgid !== undefined) {
+      await processGroupObserver.onProcessGroupStarted(pgid);
+      pgidRecorded = true;
+    }
     await waitForClaudeCliSpawn(child);
     await writePrompt(child.stdin, prompt);
 
@@ -351,5 +359,8 @@ export async function runClaudeNode(options: {
   } finally {
     abortSignal.removeEventListener('abort', stopClaudeCli);
     if (sigintGraceTimer !== null) clearTimeout(sigintGraceTimer);
+    if (pgid !== undefined && pgidRecorded) {
+      await processGroupObserver.onProcessGroupStopped(pgid);
+    }
   }
 }
