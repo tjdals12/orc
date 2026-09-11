@@ -1,5 +1,9 @@
+import util from 'node:util';
+
+import { discardGitChanges } from '#shared/git.js';
 import type { Workflow } from '#workflow/workflow.js';
 
+import { discardNodeArtifacts } from '../artifacts.js';
 import type { WorkflowRunRecorder } from '../recorder.js';
 import type { WorkflowRun, WorkflowRunNode } from '../repository.js';
 
@@ -168,11 +172,38 @@ export class WorkflowRunExecutor {
 
     if (runControlWatch.isStopRequested()) {
       await this._workflowRunRecorder.recordEvent({ type: 'run_stop_requested' });
-      const workflowExecutionResult: WorkflowExecutionResult = {
-        outcome: 'stopped',
-        nodeIds: stoppedNodeIds,
-      };
-      return workflowExecutionResult;
+      try {
+        const gitCleanup = await discardGitChanges(cwd);
+        discardNodeArtifacts(artifactsDirPath, workflow.nodes, stoppedNodeIds);
+
+        const stoppedNodes = workflowRunNodes.filter((node) =>
+          stoppedNodeIds.includes(node.node_id),
+        );
+        await this._workflowRunStateWriter.markRunStopped(workflowRun.id, stoppedNodes);
+
+        for (const stoppedNode of stoppedNodes) {
+          await this._workflowRunRecorder.recordEvent({
+            type: 'node_stopped',
+            nodeId: stoppedNode.node_id,
+          });
+        }
+
+        let warning: string | null = null;
+        if (gitCleanup.outcome === 'skipped') {
+          warning =
+            gitCleanup.reason === 'not-git'
+              ? 'Filesystem changes were preserved because the execution environment is not a Git worktree.'
+              : 'Filesystem changes were preserved because the Git worktree has no HEAD commit.';
+        }
+        await this._workflowRunRecorder.recordEvent({ type: 'run_stopped', warning });
+
+        return { outcome: 'stopped', nodeIds: stoppedNodeIds, warning };
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : util.inspect(e);
+        await this._workflowRunStateWriter.markRunStopFailed(workflowRun.id);
+        await this._workflowRunRecorder.recordEvent({ type: 'run_stop_failed', reason });
+        return { outcome: 'stop-failed', reason };
+      }
     }
 
     if (firstFailure !== null) {

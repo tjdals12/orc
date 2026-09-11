@@ -90,6 +90,7 @@ export abstract class WorkflowRunHandler {
         return (
           result.outcome.execution.outcome === 'failed' ||
           result.outcome.execution.outcome === 'stopped' ||
+          result.outcome.execution.outcome === 'stop-failed' ||
           result.outcome.execution.outcome === 'cancelled'
         );
     }

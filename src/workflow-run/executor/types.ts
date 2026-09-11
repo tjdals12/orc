@@ -6,7 +6,8 @@ export type WorkflowExecutionResult =
   | { outcome: 'succeeded'; nodeCount: number; elapsedSeconds: number }
   | { outcome: 'failed'; nodeId: string; reason: string }
   | { outcome: 'paused'; approvals: PendingApproval[] }
-  | { outcome: 'stopped'; nodeIds: string[] }
+  | { outcome: 'stopped'; nodeIds: string[]; warning: string | null }
+  | { outcome: 'stop-failed'; reason: string }
   | { outcome: 'cancelled' };
 
 export type FinishedNode =
@@ -23,6 +24,11 @@ export type WorkflowRunStateWriter = {
   markRunFailed: (workflowRunId: string) => Promise<boolean>;
   markRunSucceeded: (workflowRunId: string) => Promise<boolean>;
   markRunPaused: (workflowRunId: string) => Promise<boolean>;
+  markRunStopped: (
+    workflowRunId: string,
+    workflowRunNodes: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>[],
+  ) => Promise<void>;
+  markRunStopFailed: (workflowRunId: string) => Promise<void>;
   markRunFinished: (workflowRunId: string) => Promise<void>;
 };
 
@@ -33,9 +39,6 @@ export type WorkflowRunNodeStateWriter = {
   markNodeFailed: (
     workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
   ) => Promise<void>;
-  markNodeStopped: (
-    workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
-  ) => Promise<boolean>;
   markNodeAwaitingDecision: (
     workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
     message: string,

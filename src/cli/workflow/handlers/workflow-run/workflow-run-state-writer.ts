@@ -9,10 +9,12 @@ import {
 } from '#workflow-run/repository.js';
 
 export class WorkflowRunStateWriter {
+  private readonly _database: Kysely<Database>;
   private readonly _workflowRunRepository: WorkflowRunRepository;
   private readonly _workflowRunNodeRepository: WorkflowRunNodeRepository;
 
   constructor(database: Kysely<Database>) {
+    this._database = database;
     this._workflowRunRepository = new WorkflowRunRepository(database);
     this._workflowRunNodeRepository = new WorkflowRunNodeRepository(database);
   }
@@ -84,6 +86,48 @@ export class WorkflowRunStateWriter {
     return paused;
   }
 
+  async markRunStopped(
+    workflowRunId: string,
+    workflowRunNodes: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>[],
+  ): Promise<void> {
+    const finishedAt = new Date().toISOString();
+    await this._database.transaction().execute(async (transaction) => {
+      const stopped = await this._workflowRunRepository.update(
+        { id: workflowRunId, status: 'stopping' },
+        { status: 'stopped', pid: null, finished_at: finishedAt },
+        { transaction },
+      );
+      if (!stopped) {
+        throw new Error(`Workflow run ${workflowRunId} is no longer stopping.`);
+      }
+
+      for (const workflowRunNode of workflowRunNodes) {
+        const nodeStopped = await this._workflowRunNodeRepository.update(
+          {
+            id: workflowRunNode.id,
+            workflowRunId: workflowRunNode.workflow_run_id,
+            status: 'running',
+          },
+          { status: 'stopped', finished_at: finishedAt },
+          { transaction },
+        );
+        if (!nodeStopped) {
+          throw new Error(`Workflow run node ${workflowRunNode.id} is no longer running.`);
+        }
+      }
+    });
+  }
+
+  async markRunStopFailed(workflowRunId: string): Promise<void> {
+    const stopFailed = await this._workflowRunRepository.update(
+      { id: workflowRunId, status: 'stopping' },
+      { status: 'stop_failed', pid: null, finished_at: new Date().toISOString() },
+    );
+    if (!stopFailed) {
+      throw new Error(`Workflow run ${workflowRunId} is no longer stopping.`);
+    }
+  }
+
   async markRunFinished(workflowRunId: string): Promise<void> {
     await this._workflowRunRepository.updateOrThrow(
       {
@@ -121,23 +165,6 @@ export class WorkflowRunStateWriter {
         finished_at: new Date().toISOString(),
       },
     );
-  }
-
-  async markNodeStopped(
-    workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
-  ): Promise<boolean> {
-    const stopped = await this._workflowRunNodeRepository.update(
-      {
-        id: workflowRunNode.id,
-        workflowRunId: workflowRunNode.workflow_run_id,
-        status: 'running',
-      },
-      {
-        status: 'stopped',
-        finished_at: new Date().toISOString(),
-      },
-    );
-    return stopped;
   }
 
   async markNodeAwaitingDecision(
