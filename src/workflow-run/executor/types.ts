@@ -14,7 +14,7 @@ export type FinishedNode =
   | { outcome: 'failed'; nodeId: string; reason: string }
   | { outcome: 'errored'; nodeId: string; error: unknown };
 
-export type WorkflowRunExecutionState = 'running' | 'cancelled' | 'deleted';
+export type WorkflowRunExecutionState = 'running' | 'stopping' | 'cancelled' | 'deleted';
 
 export type WorkflowRunStateWriter = {
   markRunStarted: (workflowRun: Pick<WorkflowRun, 'id' | 'started_at'>) => Promise<boolean>;

@@ -1,9 +1,10 @@
 import type { WorkflowRunExecutionState } from './types.js';
 
-export class WorkflowRunCancellationWatch {
+export class WorkflowRunControlWatch {
   private readonly _abortController = new AbortController();
   private _poll: NodeJS.Timeout | null = null;
   private _cancelled = false;
+  private _stopRequested = false;
   private _unexpectedError: { error: unknown } | null = null;
 
   private readonly _checkWorkflowRunState: () => Promise<WorkflowRunExecutionState>;
@@ -24,9 +25,13 @@ export class WorkflowRunCancellationWatch {
     return this._cancelled;
   }
 
-  hasStopped(): boolean {
-    const hasStopped = this._cancelled || this._unexpectedError !== null;
-    return hasStopped;
+  isStopRequested(): boolean {
+    return this._stopRequested;
+  }
+
+  hasInterrupted(): boolean {
+    const interrupted = this._cancelled || this._stopRequested || this._unexpectedError !== null;
+    return interrupted;
   }
 
   start(): void {
@@ -44,7 +49,7 @@ export class WorkflowRunCancellationWatch {
   }
 
   async observe(): Promise<void> {
-    if (this.hasStopped()) return;
+    if (this.hasInterrupted()) return;
     try {
       const state = await this._checkWorkflowRunState();
       if (state === 'deleted') {
@@ -55,6 +60,10 @@ export class WorkflowRunCancellationWatch {
       }
       if (state === 'cancelled') {
         this._cancelled = true;
+        this._abortController.abort();
+      }
+      if (state === 'stopping') {
+        this._stopRequested = true;
         this._abortController.abort();
       }
     } catch (e) {

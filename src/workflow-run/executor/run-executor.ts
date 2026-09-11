@@ -3,7 +3,7 @@ import type { Workflow } from '#workflow/workflow.js';
 import type { WorkflowRunRecorder } from '../recorder.js';
 import type { WorkflowRun, WorkflowRunNode } from '../repository.js';
 
-import { WorkflowRunCancellationWatch } from './cancellation-watch.js';
+import { WorkflowRunControlWatch } from './run-control-watch.js';
 import { WorkflowRunNodeExecutor } from './node-executor.js';
 import { WorkflowRunScheduler } from './scheduler.js';
 import type {
@@ -72,7 +72,7 @@ export class WorkflowRunExecutor {
       }
     }
 
-    const cancellationWatch = new WorkflowRunCancellationWatch(this._checkWorkflowRunState);
+    const runControlWatch = new WorkflowRunControlWatch(this._checkWorkflowRunState);
 
     const nodeExecutor = new WorkflowRunNodeExecutor({
       workflowRunStateWriter: this._workflowRunStateWriter,
@@ -80,7 +80,7 @@ export class WorkflowRunExecutor {
       cwd,
       artifactsDirPath,
       input: workflowRun.input ?? '',
-      signal: cancellationWatch.signal,
+      signal: runControlWatch.signal,
     });
 
     const runNode = async (nodeId: string): Promise<FinishedNode> => {
@@ -110,15 +110,15 @@ export class WorkflowRunExecutor {
       runNode,
     });
 
-    cancellationWatch.start();
+    runControlWatch.start();
     try {
       scheduler.launchReadyNodes();
 
       while (scheduler.hasRunningNodes()) {
         const finishedNode = await scheduler.takeFinishedNode();
 
-        await cancellationWatch.observe();
-        if (cancellationWatch.hasStopped()) {
+        await runControlWatch.observe();
+        if (runControlWatch.hasInterrupted()) {
           scheduler.stopLaunching();
         }
 
@@ -146,15 +146,15 @@ export class WorkflowRunExecutor {
         scheduler.launchReadyNodes();
       }
     } finally {
-      cancellationWatch.stop();
+      runControlWatch.stop();
     }
 
-    const unexpectedError = firstUnexpectedError ?? cancellationWatch.unexpectedError;
+    const unexpectedError = firstUnexpectedError ?? runControlWatch.unexpectedError;
     if (unexpectedError !== null) {
       throw unexpectedError.error;
     }
 
-    if (cancellationWatch.isCancelled()) {
+    if (runControlWatch.isCancelled()) {
       await this.cancelRun(workflowRun);
       const workflowExecutionResult: WorkflowExecutionResult = {
         outcome: 'cancelled',
