@@ -290,6 +290,8 @@ orc workflow cancel <run-id>
 orc workflow resume <run-id>
 ```
 
+**Warning:** When a workflow runs in a Git working tree, `stop` discards uncommitted changes. Every node that modifies files should commit its work before finishing.
+
 ### Approvals
 
 Put an `approval` node wherever a person should sign off before the run moves on. When the run reaches one, it leaves an approval request and pauses. In a feature workflow that means reviewing the plan before implementation starts; in a bugfix workflow, checking the cause was correctly diagnosed before any code changes.
