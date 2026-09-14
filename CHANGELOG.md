@@ -1,3 +1,9 @@
+# [1.2.0-next.1](https://github.com/tjdals12/orc/compare/v1.1.0...v1.2.0-next.1) (2026-09-14)
+
+### Features
+
+- **workflow:** add resumable stop command ([#6](https://github.com/tjdals12/orc/issues/6)) ([a1c6d6c](https://github.com/tjdals12/orc/commit/a1c6d6c48cebc856a9adad87a5da564d33e4046e))
+
 # [1.1.0](https://github.com/tjdals12/orc/compare/v1.0.0...v1.1.0) (2026-09-06)
 
 ### Features
