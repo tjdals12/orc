@@ -10,6 +10,7 @@ import type {
   WorkflowRunHookLogType,
   WorkflowRunNodeLogsTable,
   WorkflowRunNodeLogType,
+  WorkflowRunNodeProcessGroupsTable,
   WorkflowRunNodesTable,
   WorkflowRunNodeStatus,
   WorkflowRunsTable,
@@ -166,6 +167,7 @@ export class WorkflowRunRepository {
 }
 
 export type WorkflowRunNode = Selectable<WorkflowRunNodesTable>;
+export type WorkflowRunNodeProcessGroup = Selectable<WorkflowRunNodeProcessGroupsTable>;
 
 type CreateManyWorkflowRunNodeInput = {
   workflowRunId: string;
@@ -260,6 +262,53 @@ export class WorkflowRunNodeRepository {
         `No workflow run node with id ${where.id} in workflow run ${where.workflowRunId}`,
       );
     }
+  }
+}
+
+export class WorkflowRunNodeProcessGroupRepository {
+  constructor(private readonly database: Kysely<Database>) {}
+
+  async findManyByWorkflowRunNodeId(
+    workflowRunNodeId: string,
+  ): Promise<WorkflowRunNodeProcessGroup[]> {
+    return this.database
+      .selectFrom('workflow_run_node_process_groups')
+      .selectAll()
+      .where('workflow_run_node_id', '=', workflowRunNodeId)
+      .orderBy('created_at', 'asc')
+      .execute();
+  }
+
+  async create(
+    workflowRunNodeId: string,
+    pgid: number,
+    options: RepositoryWriteOptions = {},
+  ): Promise<boolean> {
+    const executor = options.transaction ?? this.database;
+    const result = await executor
+      .insertInto('workflow_run_node_process_groups')
+      .values({
+        workflow_run_node_id: workflowRunNodeId,
+        pgid,
+        created_at: new Date().toISOString(),
+      })
+      .onConflict((conflict) => conflict.doNothing())
+      .executeTakeFirst();
+    return (result.numInsertedOrUpdatedRows ?? 0n) > 0n;
+  }
+
+  async delete(
+    workflowRunNodeId: string,
+    pgid: number,
+    options: RepositoryWriteOptions = {},
+  ): Promise<boolean> {
+    const executor = options.transaction ?? this.database;
+    const result = await executor
+      .deleteFrom('workflow_run_node_process_groups')
+      .where('workflow_run_node_id', '=', workflowRunNodeId)
+      .where('pgid', '=', pgid)
+      .executeTakeFirst();
+    return result.numDeletedRows > 0n;
   }
 }
 

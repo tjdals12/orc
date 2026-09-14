@@ -178,13 +178,16 @@ export async function runGrokNode(options: {
   let stopRequested = false;
   let sigintGraceTimer: NodeJS.Timeout | null = null;
   const backgroundProcessGroups = new Set<number>();
-  const backgroundStopPromises = new Map<number, Promise<Error | null>>();
+  const recordedBackgroundProcessGroups = new Set<number>();
+  const backgroundStopPromises = new Map<number, Promise<void>>();
   const stopBackgroundProcessGroup = (pgid: number): void => {
     if (backgroundStopPromises.has(pgid)) return;
-    const stopped = ProcessGroupRegistry.stopGroup(pgid).then(
-      () => null,
-      (error: unknown) => (error instanceof Error ? error : new Error(util.inspect(error))),
-    );
+    const stopped = ProcessGroupRegistry.stopGroup(pgid).then(async () => {
+      if (recordedBackgroundProcessGroups.has(pgid)) {
+        await processGroupObserver.onProcessGroupStopped(pgid);
+      }
+    });
+    void stopped.catch(() => undefined);
     backgroundStopPromises.set(pgid, stopped);
   };
   const stopGrokCli = (): void => {
@@ -277,7 +280,12 @@ export async function runGrokNode(options: {
           if (isFinalUpdate) {
             const backgroundPgid = parseGrokBackgroundTaskPgid(event.rawOutput);
             if (backgroundPgid !== null) {
+              const shouldAddProcessGroup = !backgroundProcessGroups.has(backgroundPgid);
               backgroundProcessGroups.add(backgroundPgid);
+              if (shouldAddProcessGroup) {
+                await processGroupObserver.onProcessGroupStarted(backgroundPgid);
+                recordedBackgroundProcessGroups.add(backgroundPgid);
+              }
               if (stopRequested) stopBackgroundProcessGroup(backgroundPgid);
             }
             const toolName = toolNameById.get(event.toolCallId) ?? 'unknown';
@@ -392,12 +400,12 @@ export async function runGrokNode(options: {
   } finally {
     abortSignal.removeEventListener('abort', stopGrokCli);
     if (sigintGraceTimer !== null) clearTimeout(sigintGraceTimer);
+    for (const backgroundPgid of backgroundProcessGroups) {
+      stopBackgroundProcessGroup(backgroundPgid);
+    }
     if (pgid !== undefined && pgidRecorded) {
       await processGroupObserver.onProcessGroupStopped(pgid);
     }
-    await Promise.all(backgroundStopPromises.values()).then((errors) => {
-      const error = errors.find((candidate) => candidate !== null);
-      if (error !== undefined && error !== null) throw error;
-    });
+    await Promise.all(backgroundStopPromises.values());
   }
 }

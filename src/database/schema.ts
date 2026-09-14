@@ -53,6 +53,12 @@ export type WorkflowRunNodesTable = {
   finished_at: string | null;
 };
 
+export type WorkflowRunNodeProcessGroupsTable = {
+  workflow_run_node_id: string;
+  pgid: number;
+  created_at: string;
+};
+
 export type WorkflowRunEventType =
   | 'node_started'
   | 'node_succeeded'
@@ -116,6 +122,7 @@ export type Database = {
   execution_environments: ExecutionEnvironmentsTable;
   workflow_runs: WorkflowRunsTable;
   workflow_run_nodes: WorkflowRunNodesTable;
+  workflow_run_node_process_groups: WorkflowRunNodeProcessGroupsTable;
   workflow_run_events: WorkflowRunEventsTable;
   workflow_run_node_logs: WorkflowRunNodeLogsTable;
   workflow_run_hook_logs: WorkflowRunHookLogsTable;
