@@ -107,6 +107,16 @@ export class WorkflowRunStateWriter {
       }
 
       for (const workflowRunNode of workflowRunNodes) {
+        const processGroups =
+          await this._workflowRunNodeProcessGroupRepository.findManyByWorkflowRunNodeId(
+            workflowRunNode.id,
+            { transaction },
+          );
+        if (processGroups.length > 0) {
+          throw new Error(
+            `Workflow run node ${workflowRunNode.id} still has running process groups.`,
+          );
+        }
         const nodeStopped = await this._workflowRunNodeRepository.update(
           {
             id: workflowRunNode.id,

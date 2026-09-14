@@ -270,12 +270,29 @@ export class WorkflowRunNodeProcessGroupRepository {
 
   async findManyByWorkflowRunNodeId(
     workflowRunNodeId: string,
+    options: RepositoryWriteOptions = {},
   ): Promise<WorkflowRunNodeProcessGroup[]> {
-    return this.database
+    const executor = options.transaction ?? this.database;
+    return executor
       .selectFrom('workflow_run_node_process_groups')
       .selectAll()
       .where('workflow_run_node_id', '=', workflowRunNodeId)
       .orderBy('created_at', 'asc')
+      .execute();
+  }
+
+  async findManyByWorkflowRunId(workflowRunId: string): Promise<WorkflowRunNodeProcessGroup[]> {
+    return this.database
+      .selectFrom('workflow_run_node_process_groups')
+      .innerJoin(
+        'workflow_run_nodes',
+        'workflow_run_nodes.id',
+        'workflow_run_node_process_groups.workflow_run_node_id',
+      )
+      .selectAll('workflow_run_node_process_groups')
+      .where('workflow_run_nodes.workflow_run_id', '=', workflowRunId)
+      .orderBy('workflow_run_nodes.position', 'asc')
+      .orderBy('workflow_run_node_process_groups.created_at', 'asc')
       .execute();
   }
 

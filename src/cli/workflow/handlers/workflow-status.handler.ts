@@ -1,5 +1,6 @@
 import {
   WorkflowRunEventRepository,
+  WorkflowRunNodeProcessGroupRepository,
   WorkflowRunNodeRepository,
   WorkflowRunRepository,
   type WorkflowRun,
@@ -22,18 +23,23 @@ export type WorkflowStatusResult = {
   environment: ExecutionEnvironment | null;
   nodes: WorkflowRunNode[];
   events: WorkflowRunEvent[];
+  hasInterruptedProcessGroup: boolean;
 };
 
 export class WorkflowStatusHandler {
   private readonly _workflowRunRepository: WorkflowRunRepository;
   private readonly _workflowRunNodeRepository: WorkflowRunNodeRepository;
   private readonly _workflowRunEventRepository: WorkflowRunEventRepository;
+  private readonly _workflowRunNodeProcessGroupRepository: WorkflowRunNodeProcessGroupRepository;
   private readonly _executionEnvironmentRepository: ExecutionEnvironmentRepository;
 
   constructor(database: Kysely<Database>) {
     this._workflowRunRepository = new WorkflowRunRepository(database);
     this._workflowRunNodeRepository = new WorkflowRunNodeRepository(database);
     this._workflowRunEventRepository = new WorkflowRunEventRepository(database);
+    this._workflowRunNodeProcessGroupRepository = new WorkflowRunNodeProcessGroupRepository(
+      database,
+    );
     this._executionEnvironmentRepository = new ExecutionEnvironmentRepository(database);
   }
 
@@ -49,6 +55,16 @@ export class WorkflowStatusHandler {
 
     const workflowRunEvents = await this._workflowRunEventRepository.findManyByWorkflowRunId(
       args.workflowRunId,
+    );
+
+    const processGroups = await this._workflowRunNodeProcessGroupRepository.findManyByWorkflowRunId(
+      args.workflowRunId,
+    );
+    const runningNodeIds = new Set(
+      workflowRunNodes.filter((node) => node.status === 'running').map((node) => node.id),
+    );
+    const hasInterruptedProcessGroup = processGroups.some((processGroup) =>
+      runningNodeIds.has(processGroup.workflow_run_node_id),
     );
 
     let environment: ExecutionEnvironment | null = null;
@@ -67,6 +83,7 @@ export class WorkflowStatusHandler {
       environment,
       nodes: workflowRunNodes,
       events: workflowRunEvents,
+      hasInterruptedProcessGroup,
     };
     return result;
   }
