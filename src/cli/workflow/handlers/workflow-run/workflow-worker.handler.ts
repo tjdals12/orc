@@ -131,6 +131,10 @@ export class WorkflowWorkerHandler {
       return 'cancelled';
     }
 
+    if (workflowRun.status === 'stopping') {
+      return 'stopping';
+    }
+
     return 'running';
   }
 }

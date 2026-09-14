@@ -15,7 +15,15 @@ export type ExecutionEnvironmentsTable = {
 };
 
 export type WorkflowRunStatus =
-  'pending' | 'running' | 'paused' | 'succeeded' | 'failed' | 'cancelled';
+  | 'pending'
+  | 'running'
+  | 'stopping'
+  | 'stopped'
+  | 'stop_failed'
+  | 'paused'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
 export type WorkflowRunsTable = {
   id: string;
   project_id: string;
@@ -30,7 +38,7 @@ export type WorkflowRunsTable = {
 };
 
 export type WorkflowRunNodeStatus =
-  'pending' | 'running' | 'awaiting_decision' | 'rejected' | 'succeeded' | 'failed';
+  'pending' | 'running' | 'stopped' | 'awaiting_decision' | 'rejected' | 'succeeded' | 'failed';
 export type WorkflowRunNodesTable = {
   id: string;
   workflow_run_id: string;
@@ -38,6 +46,7 @@ export type WorkflowRunNodesTable = {
   position: number;
   status: WorkflowRunNodeStatus;
   attempt: number;
+  pgid: number | null;
   message: string | null;
   reason: string | null;
   started_at: string | null;
@@ -48,6 +57,7 @@ export type WorkflowRunEventType =
   | 'node_started'
   | 'node_succeeded'
   | 'node_failed'
+  | 'node_stopped'
   | 'agent_session_started'
   | 'iteration_started'
   | 'iteration_completed'
@@ -58,6 +68,9 @@ export type WorkflowRunEventType =
   | 'run_succeeded'
   | 'run_failed'
   | 'run_cancelled'
+  | 'run_stop_requested'
+  | 'run_stopped'
+  | 'run_stop_failed'
   | 'run_resumed'
   | 'run_paused'
   | 'worktree_creating'

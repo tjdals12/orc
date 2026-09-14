@@ -10,6 +10,7 @@ import type { WorkflowRunRecorder } from '../recorder.js';
 import type { WorkflowRunNode } from '../repository.js';
 import type { ApprovalNodeRunResult, NodeRunResult } from '../types.js';
 import type { FinishedNode, WorkflowRunNodeStateWriter } from './types.js';
+import { WORKFLOW_RUN_STOP_ABORT_REASON } from './run-control-watch.js';
 import type { ApprovalNode } from '#workflow/node/approval-node.js';
 import {
   collectArtifactNames,
@@ -68,6 +69,9 @@ export class WorkflowRunNodeExecutor {
       if (workflowRunNode.status === 'rejected') {
         const onRejectRunResult = await this.executeOnReject(workflowNode, workflowRunNode);
         if (onRejectRunResult.outcome === 'failed') {
+          if (this.isStopRequested()) {
+            return { outcome: 'stopped', nodeId: workflowRunNode.node_id };
+          }
           await this.failNode(workflowRunNode, onRejectRunResult.reason);
 
           const finishedNode: FinishedNode = {
@@ -101,9 +105,12 @@ export class WorkflowRunNodeExecutor {
       return finishedNode;
     }
 
-    const nodeRunResult = await this.executeWorkflowNode(workflowNode);
+    const nodeRunResult = await this.executeWorkflowNode(workflowNode, workflowRunNode);
 
     if (nodeRunResult.outcome === 'failed') {
+      if (this.isStopRequested()) {
+        return { outcome: 'stopped', nodeId: workflowRunNode.node_id };
+      }
       await this.failNode(workflowRunNode, nodeRunResult.reason);
 
       const finishedNode: FinishedNode = {
@@ -186,6 +193,12 @@ export class WorkflowRunNodeExecutor {
         },
         detached: true,
         signal: this._signal,
+        processGroupObserver: {
+          onProcessGroupStarted: (pgid) =>
+            this._workflowRunStateWriter.markNodeProcessGroupStarted(workflowRunNode, pgid),
+          onProcessGroupStopped: (pgid) =>
+            this._workflowRunStateWriter.markNodeProcessGroupStopped(workflowRunNode, pgid),
+        },
         recordOutput: async (stream, text) => {
           await this._workflowRunRecorder.recordLog({
             type: 'bash_output',
@@ -225,6 +238,12 @@ export class WorkflowRunNodeExecutor {
         prompt,
         cwd: this._cwd,
         abortSignal: this._signal,
+        processGroupObserver: {
+          onProcessGroupStarted: (pgid) =>
+            this._workflowRunStateWriter.markNodeProcessGroupStarted(workflowRunNode, pgid),
+          onProcessGroupStopped: (pgid) =>
+            this._workflowRunStateWriter.markNodeProcessGroupStopped(workflowRunNode, pgid),
+        },
         recordOutput: async (output) => {
           await this._workflowRunRecorder.recordLog({
             type: 'agent_output',
@@ -247,14 +266,17 @@ export class WorkflowRunNodeExecutor {
     throw new Error('Unknown on_reject type');
   }
 
-  private async executeWorkflowNode(workflowNode: BashNode | AgentNode): Promise<NodeRunResult> {
+  private async executeWorkflowNode(
+    workflowNode: BashNode | AgentNode,
+    workflowRunNode: WorkflowRunNode,
+  ): Promise<NodeRunResult> {
     if (workflowNode.type === 'bash') {
-      const nodeRunResult = await this.executeBashNode(workflowNode);
+      const nodeRunResult = await this.executeBashNode(workflowNode, workflowRunNode);
       return nodeRunResult;
     }
 
     if (workflowNode.type === 'agent') {
-      const nodeRunResult = await this.executeAgentNode(workflowNode);
+      const nodeRunResult = await this.executeAgentNode(workflowNode, workflowRunNode);
       return nodeRunResult;
     }
 
@@ -262,7 +284,10 @@ export class WorkflowRunNodeExecutor {
     throw new Error('Unknown workflow node type');
   }
 
-  private async executeBashNode(node: BashNode): Promise<NodeRunResult> {
+  private async executeBashNode(
+    node: BashNode,
+    workflowRunNode: WorkflowRunNode,
+  ): Promise<NodeRunResult> {
     const nodeRunResult = await runBashNode(node, {
       cwd: this._cwd,
       env: {
@@ -271,6 +296,12 @@ export class WorkflowRunNodeExecutor {
       },
       detached: true,
       signal: this._signal,
+      processGroupObserver: {
+        onProcessGroupStarted: (pgid) =>
+          this._workflowRunStateWriter.markNodeProcessGroupStarted(workflowRunNode, pgid),
+        onProcessGroupStopped: (pgid) =>
+          this._workflowRunStateWriter.markNodeProcessGroupStopped(workflowRunNode, pgid),
+      },
       recordOutput: async (stream, text) => {
         await this._workflowRunRecorder.recordLog({
           type: 'bash_output',
@@ -283,7 +314,10 @@ export class WorkflowRunNodeExecutor {
     return nodeRunResult;
   }
 
-  private async executeAgentNode(node: AgentNode): Promise<NodeRunResult> {
+  private async executeAgentNode(
+    node: AgentNode,
+    workflowRunNode: WorkflowRunNode,
+  ): Promise<NodeRunResult> {
     let artifactTextByName: Map<string, string>;
     try {
       artifactTextByName = this.readConsumedArtifactTexts(this._artifactsDirPath, node.prompt);
@@ -306,11 +340,23 @@ export class WorkflowRunNodeExecutor {
       prompt,
       cwd: this._cwd,
       abortSignal: this._signal,
+      processGroupObserver: {
+        onProcessGroupStarted: (pgid) =>
+          this._workflowRunStateWriter.markNodeProcessGroupStarted(workflowRunNode, pgid),
+        onProcessGroupStopped: (pgid) =>
+          this._workflowRunStateWriter.markNodeProcessGroupStopped(workflowRunNode, pgid),
+      },
       bashCheckOptions: {
         cwd: this._cwd,
         env: { ARTIFACTS_DIR: this._artifactsDirPath, INPUT: this._input },
         detached: true,
         signal: this._signal,
+        processGroupObserver: {
+          onProcessGroupStarted: (pgid) =>
+            this._workflowRunStateWriter.markNodeProcessGroupStarted(workflowRunNode, pgid),
+          onProcessGroupStopped: (pgid) =>
+            this._workflowRunStateWriter.markNodeProcessGroupStopped(workflowRunNode, pgid),
+        },
         recordOutput: async (stream, text) => {
           await this._workflowRunRecorder.recordLog({
             type: 'bash_output',
@@ -363,6 +409,10 @@ export class WorkflowRunNodeExecutor {
       artifactTextByName.set(artifactName, artifactText);
     }
     return artifactTextByName;
+  }
+
+  private isStopRequested(): boolean {
+    return this._signal.aborted && this._signal.reason === WORKFLOW_RUN_STOP_ABORT_REASON;
   }
 
   private async startNode(workflowRunNode: WorkflowRunNode): Promise<void> {

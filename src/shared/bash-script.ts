@@ -4,7 +4,7 @@ import type { Readable } from 'node:stream';
 import util from 'node:util';
 
 import { relayOutputLines } from './process-output-relay.js';
-import { ProcessGroupRegistry } from './process-group-registry.js';
+import { ProcessGroupRegistry, type ProcessGroupObserver } from './process-group-registry.js';
 
 type BashExit =
   | { kind: 'spawn-failed'; message: string }
@@ -27,7 +27,10 @@ export type BashScriptOptions = {
   cwd: string;
   env?: Record<string, string>;
   recordOutput: RecordBashOutput;
-} & ({ detached: true; signal: AbortSignal } | { detached?: false });
+} & (
+  | { detached: true; signal: AbortSignal; processGroupObserver?: ProcessGroupObserver }
+  | { detached?: false }
+);
 
 type BashScriptResult =
   | { outcome: 'spawn-failed'; message: string }
@@ -57,6 +60,8 @@ export async function runBashScript(
   const stopOnAbort = (): void => {
     ProcessGroupRegistry.stop(child);
   };
+  const pgid = child.pid;
+  let pgidRecorded = false;
   if (options.detached) {
     ProcessGroupRegistry.register(child);
     options.signal.addEventListener('abort', stopOnAbort, { once: true });
@@ -65,10 +70,27 @@ export async function runBashScript(
   const exitReported = waitForBashExit(child);
   const stdoutRelayed = relayOutputLines(child.stdout, (text) => recordOutput('stdout', text));
   const stderrRelayed = relayOutputLines(child.stderr, (text) => recordOutput('stderr', text));
+
+  if (options.detached && pgid !== undefined && options.processGroupObserver !== undefined) {
+    try {
+      await options.processGroupObserver.onProcessGroupStarted(pgid);
+      pgidRecorded = true;
+    } catch (e) {
+      ProcessGroupRegistry.stop(child);
+      await Promise.allSettled([exitReported, stdoutRelayed, stderrRelayed]);
+      options.signal.removeEventListener('abort', stopOnAbort);
+      const message = e instanceof Error ? e.message : util.inspect(e);
+      return { outcome: 'spawn-failed', message: `Failed to record process group: ${message}` };
+    }
+  }
+
   const [exit] = await Promise.all([exitReported, stdoutRelayed, stderrRelayed]);
 
   if (options.detached) {
     options.signal.removeEventListener('abort', stopOnAbort);
+    if (pgid !== undefined && pgidRecorded) {
+      await options.processGroupObserver?.onProcessGroupStopped(pgid);
+    }
   }
 
   if (exit.kind === 'spawn-failed') {

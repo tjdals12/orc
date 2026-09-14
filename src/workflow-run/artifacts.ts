@@ -3,6 +3,38 @@ import path from 'node:path';
 import util from 'node:util';
 
 import { tokenizeText } from '#workflow/node/text-token.js';
+import type { WorkflowNode } from '#workflow/node/workflow-node.js';
+
+export function discardNodeArtifacts(
+  artifactsDirPath: string,
+  workflowNodes: WorkflowNode[],
+  nodeIds: string[],
+): void {
+  const nodeById = new Map(workflowNodes.map((node) => [node.id, node]));
+  const artifactNames = new Set<string>();
+
+  for (const nodeId of nodeIds) {
+    const node = nodeById.get(nodeId);
+    if (!node) {
+      throw new Error(`No workflow node for node ${nodeId}`);
+    }
+    for (const artifactName of node.produces) {
+      artifactNames.add(artifactName);
+    }
+  }
+
+  for (const artifactName of artifactNames) {
+    const artifactPath = path.join(artifactsDirPath, artifactName);
+    try {
+      fs.rmSync(artifactPath, { force: true });
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : util.inspect(e);
+      throw new Error(`Artifact "${artifactName}" could not be discarded: ${detail}`, {
+        cause: e,
+      });
+    }
+  }
+}
 
 export function findMissingArtifacts(artifactsDirPath: string, artifactNames: string[]): string[] {
   const missingArtifactNames = artifactNames.filter((artifactName) => {

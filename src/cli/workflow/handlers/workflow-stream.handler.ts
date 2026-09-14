@@ -212,7 +212,11 @@ export class WorkflowStreamFollowHandler {
     if (!workflowRun) {
       return 'deleted';
     }
-    if (workflowRun.status !== 'pending' && workflowRun.status !== 'running') {
+    const runIsActive =
+      workflowRun.status === 'pending' ||
+      workflowRun.status === 'running' ||
+      workflowRun.status === 'stopping';
+    if (!runIsActive) {
       return 'ended';
     }
 

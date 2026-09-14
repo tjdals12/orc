@@ -9,6 +9,7 @@ function approvalStatusColor(status: WorkflowRunNodeStatus): (text: string) => s
   switch (status) {
     case 'pending':
     case 'running':
+    case 'stopped':
     case 'rejected':
       return style.muted;
     case 'awaiting_decision':

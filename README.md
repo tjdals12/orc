@@ -36,7 +36,7 @@ orc is a workflow engine for AI coding agents: you write that loop down as a YAM
   - [Ask an agent](#ask-an-agent)
   - [From the CLI](#from-the-cli)
   - [Checking a run](#checking-a-run)
-  - [Cancelling and resuming](#cancelling-and-resuming)
+  - [Stopping, cancelling, and resuming](#stopping-cancelling-and-resuming)
   - [Approvals](#approvals)
 - [Project structure](#project-structure)
 - [Worktrees](#worktrees)
@@ -275,17 +275,22 @@ Every run is given a unique ID. Use it to check the run's state and what it reco
 | `orc workflow hook-logs <run-id>` | What the worktree hooks printed                |
 | `orc workflow approvals <run-id>` | What the run is asking                         |
 
-### Cancelling and resuming
+### Stopping, cancelling, and resuming
 
-You can cancel a running workflow, and pick a failed one back up.
+Use `stop` or `cancel` to halt a workflow run. You can resume a stopped run, but not a cancelled one.
 
 ```bash
+# Stop a workflow so it can be resumed later
+orc workflow stop <run-id>
+
 # Cancel a running workflow. A cancelled run cannot be resumed
 orc workflow cancel <run-id>
 
-# Resume a failed workflow. It keeps the original input and picks up at the nodes that did not finish
+# Resume a stopped or failed workflow with its original input, starting from unfinished nodes
 orc workflow resume <run-id>
 ```
+
+**Warning:** When a workflow runs in a Git working tree, `stop` discards uncommitted changes. Every node that modifies files should commit its work before finishing.
 
 ### Approvals
 
@@ -645,7 +650,7 @@ orc workflow run <id> [options]
 
 ### `orc workflow resume`
 
-Continues a stopped workflow run from where it left off.
+Resumes a stopped or failed workflow run from its unfinished nodes. A run with status `stop_failed` cannot be resumed; run `stop` again first.
 
 ```text
 orc workflow resume <run-id> [options]
@@ -775,6 +780,18 @@ Cancels a running or paused workflow. A cancelled run cannot be resumed.
 ```text
 orc workflow cancel <run-id>
 ```
+
+### `orc workflow stop`
+
+Stops a workflow run. You can resume a stopped run. In a Git repository, stopping discards uncommitted changes but preserves ignored files.
+
+```text
+orc workflow stop <run-id> [options]
+```
+
+| Option   | What it does                   |
+| -------- | ------------------------------ |
+| `--json` | Print the stop request as JSON |
 
 ### `orc workflow prune`
 

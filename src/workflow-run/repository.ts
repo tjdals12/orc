@@ -37,7 +37,10 @@ type CreateWorkflowRunInput = {
 
 type WorkflowRunStatusMatch = WorkflowRunStatus | { in: WorkflowRunStatus[] };
 
-type WorkflowRunMatch = Pick<WorkflowRun, 'id'> & { status?: WorkflowRunStatusMatch };
+type WorkflowRunMatch = Pick<WorkflowRun, 'id'> & {
+  status?: WorkflowRunStatusMatch;
+  pid?: number | null;
+};
 
 type WorkflowRunNodeStatusMatch = WorkflowRunNodeStatus | { in: WorkflowRunNodeStatus[] };
 
@@ -45,6 +48,7 @@ type WorkflowRunNodeMatch = {
   id: string;
   workflowRunId: string;
   status?: WorkflowRunNodeStatusMatch;
+  pgid?: number | null;
 };
 
 export class WorkflowRunRepository {
@@ -135,6 +139,10 @@ export class WorkflowRunRepository {
           ? query.where('status', '=', where.status)
           : query.where('status', 'in', where.status.in);
     }
+    if (where.pid !== undefined) {
+      query =
+        where.pid === null ? query.where('pid', 'is', null) : query.where('pid', '=', where.pid);
+    }
     const result = await query.executeTakeFirst();
     const updated = result.numUpdatedRows > 0n;
     return updated;
@@ -202,6 +210,7 @@ export class WorkflowRunNodeRepository {
         position,
         status: 'pending',
         attempt: 1,
+        pgid: null,
         message: null,
         reason: null,
         started_at: null,
@@ -228,6 +237,12 @@ export class WorkflowRunNodeRepository {
         typeof where.status === 'string'
           ? query.where('status', '=', where.status)
           : query.where('status', 'in', where.status.in);
+    }
+    if (where.pgid !== undefined) {
+      query =
+        where.pgid === null
+          ? query.where('pgid', 'is', null)
+          : query.where('pgid', '=', where.pgid);
     }
     const result = await query.executeTakeFirst();
     const updated = result.numUpdatedRows > 0n;

@@ -42,6 +42,8 @@ export async function followWorkflowRun(
     'run_failed',
     'run_cancelled',
     'run_paused',
+    'run_stopped',
+    'run_stop_failed',
   ];
 
   const consumeNewEntries = async (): Promise<void> => {

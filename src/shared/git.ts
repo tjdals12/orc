@@ -38,6 +38,34 @@ export async function hasHeadCommit(repoPath: string): Promise<boolean> {
   }
 }
 
+export async function isGitWorkTree(repoPath: string): Promise<boolean> {
+  try {
+    const stdout = await runGit(['rev-parse', '--is-inside-work-tree'], { cwd: repoPath });
+    return stdout.trim() === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export type DiscardGitChangesResult =
+  { outcome: 'discarded' } | { outcome: 'skipped'; reason: 'not-git' | 'no-head' };
+
+export async function discardGitChanges(repoPath: string): Promise<DiscardGitChangesResult> {
+  const gitWorkTree = await isGitWorkTree(repoPath);
+  if (!gitWorkTree) {
+    return { outcome: 'skipped', reason: 'not-git' };
+  }
+
+  const headCommit = await hasHeadCommit(repoPath);
+  if (!headCommit) {
+    return { outcome: 'skipped', reason: 'no-head' };
+  }
+
+  await runGit(['reset', '--hard', 'HEAD'], { cwd: repoPath });
+  await runGit(['clean', '-fd'], { cwd: repoPath });
+  return { outcome: 'discarded' };
+}
+
 export async function hasBranch(args: { repoPath: string; branch: string }): Promise<boolean> {
   const { repoPath, branch } = args;
   try {

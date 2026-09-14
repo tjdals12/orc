@@ -28,6 +28,18 @@ function parseRunFailedEventData(data: string): RunFailedEvent {
   return result.data;
 }
 
+const RunStoppedEventSchema = z.object({ warning: z.string() });
+type RunStoppedEvent = z.infer<typeof RunStoppedEventSchema>;
+
+function parseRunStoppedEventData(data: string): RunStoppedEvent {
+  const parsed: unknown = JSON.parse(data);
+  const result = RunStoppedEventSchema.safeParse(parsed);
+  if (result.error) {
+    throw new Error(`Broken run_stopped event data.\n${z.prettifyError(result.error)}`);
+  }
+  return result.data;
+}
+
 const DecisionRejectedEventSchema = z.object({ reason: z.string() });
 type DecisionRejectedEvent = z.infer<typeof DecisionRejectedEventSchema>;
 
@@ -99,6 +111,14 @@ export function parseEventDetail(type: WorkflowRunEventType, data: string | null
   if (type === 'run_failed' && data !== null) {
     const { reason } = parseRunFailedEventData(data);
     return reason;
+  }
+  if (type === 'run_stop_failed') {
+    const { reason } = parseRunFailedEventData(data ?? 'null');
+    return reason;
+  }
+  if (type === 'run_stopped' && data !== null) {
+    const { warning } = parseRunStoppedEventData(data);
+    return warning;
   }
   if (type === 'decision_rejected' && data !== null) {
     const { reason } = parseDecisionRejectedEventData(data);

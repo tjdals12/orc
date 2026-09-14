@@ -12,6 +12,7 @@ type RecordWorkflowRunEventInput =
   | { type: 'node_started'; nodeId: string }
   | { type: 'node_succeeded'; nodeId: string }
   | { type: 'node_failed'; nodeId: string; reason: string }
+  | { type: 'node_stopped'; nodeId: string }
   | { type: 'agent_session_started'; nodeId: string; session: AgentSession }
   | { type: 'iteration_started'; nodeId: string; iteration: number; maxIterations: number }
   | { type: 'iteration_completed'; nodeId: string; iteration: number; verdict: LoopVerdictKind }
@@ -22,6 +23,9 @@ type RecordWorkflowRunEventInput =
   | { type: 'run_succeeded' }
   | { type: 'run_failed'; reason: string | null }
   | { type: 'run_cancelled' }
+  | { type: 'run_stop_requested' }
+  | { type: 'run_stopped'; warning: string | null }
+  | { type: 'run_stop_failed'; reason: string }
   | { type: 'run_resumed' }
   | { type: 'run_paused' }
   | { type: 'worktree_creating' }
@@ -145,6 +149,7 @@ export class WorkflowRunRecorder {
     switch (input.type) {
       case 'node_started':
       case 'node_succeeded':
+      case 'node_stopped':
         return { type: input.type, nodeId: input.nodeId, data: null };
       case 'node_failed':
         return { type: input.type, nodeId: input.nodeId, data: { reason: input.reason } };
@@ -178,6 +183,7 @@ export class WorkflowRunRecorder {
       case 'run_started':
       case 'run_succeeded':
       case 'run_cancelled':
+      case 'run_stop_requested':
       case 'run_resumed':
       case 'run_paused':
       case 'worktree_creating':
@@ -192,6 +198,18 @@ export class WorkflowRunRecorder {
           type: input.type,
           nodeId: null,
           data: input.reason === null ? null : { reason: input.reason },
+        };
+      case 'run_stop_failed':
+        return {
+          type: input.type,
+          nodeId: null,
+          data: { reason: input.reason },
+        };
+      case 'run_stopped':
+        return {
+          type: input.type,
+          nodeId: null,
+          data: input.warning === null ? null : { warning: input.warning },
         };
       case 'hook_started':
         return {
