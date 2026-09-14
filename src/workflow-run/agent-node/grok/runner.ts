@@ -12,7 +12,7 @@ import { detectCompletionSignal } from '../completion-signal.js';
 import { JsonLinesParseError, parseJsonLines } from '../json-lines.js';
 import { PREVIEW_LIMIT, tryDecodeOutputText } from '../output-text.js';
 import type { AgentRunResult, RecordAgentOutput, RecordAgentSession } from '../types.js';
-import { parseGrokEvent } from './contract.js';
+import { parseGrokBackgroundTaskPgid, parseGrokEvent } from './contract.js';
 
 type GrokProcessExit =
   | { outcome: 'spawn-failed'; message: string }
@@ -177,9 +177,23 @@ export async function runGrokNode(options: {
 
   let stopRequested = false;
   let sigintGraceTimer: NodeJS.Timeout | null = null;
+  const backgroundProcessGroups = new Set<number>();
+  const backgroundStopPromises = new Map<number, Promise<Error | null>>();
+  const stopBackgroundProcessGroup = (pgid: number): void => {
+    if (backgroundStopPromises.has(pgid)) return;
+    const stopped = ProcessGroupRegistry.stopGroup(pgid).then(
+      () => null,
+      (error: unknown) => (error instanceof Error ? error : new Error(util.inspect(error))),
+    );
+    backgroundStopPromises.set(pgid, stopped);
+  };
   const stopGrokCli = (): void => {
     if (stopRequested) return;
     stopRequested = true;
+
+    for (const pgid of backgroundProcessGroups) {
+      stopBackgroundProcessGroup(pgid);
+    }
 
     try {
       child.kill('SIGINT');
@@ -261,6 +275,11 @@ export async function runGrokNode(options: {
           const status = event.status;
           const isFinalUpdate = status === 'completed' || status === 'failed';
           if (isFinalUpdate) {
+            const backgroundPgid = parseGrokBackgroundTaskPgid(event.rawOutput);
+            if (backgroundPgid !== null) {
+              backgroundProcessGroups.add(backgroundPgid);
+              if (stopRequested) stopBackgroundProcessGroup(backgroundPgid);
+            }
             const toolName = toolNameById.get(event.toolCallId) ?? 'unknown';
             await recordOutput({
               provider: 'grok',
@@ -376,5 +395,9 @@ export async function runGrokNode(options: {
     if (pgid !== undefined && pgidRecorded) {
       await processGroupObserver.onProcessGroupStopped(pgid);
     }
+    await Promise.all(backgroundStopPromises.values()).then((errors) => {
+      const error = errors.find((candidate) => candidate !== null);
+      if (error !== undefined && error !== null) throw error;
+    });
   }
 }
