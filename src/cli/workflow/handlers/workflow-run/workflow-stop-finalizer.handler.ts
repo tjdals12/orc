@@ -8,7 +8,11 @@ import { ExecutionEnvironmentRepository } from '#execution-environment/repositor
 import { ProcessGroupRegistry } from '#shared/process-group-registry.js';
 import { cleanupStoppedRun } from '#workflow-run/stop-cleanup.js';
 import { resolveWorkflowRunLiveness } from '#workflow-run/liveness.js';
-import { WorkflowRunNodeRepository, WorkflowRunRepository } from '#workflow-run/repository.js';
+import {
+  WorkflowRunNodeProcessGroupRepository,
+  WorkflowRunNodeRepository,
+  WorkflowRunRepository,
+} from '#workflow-run/repository.js';
 import { WorkflowRunError } from '#workflow-run/error.js';
 
 import { WorkflowRunLoader } from './workflow-run-loader.js';
@@ -17,6 +21,7 @@ import { WorkflowRunStateWriter } from './workflow-run-state-writer.js';
 export class WorkflowStopFinalizerHandler {
   private readonly _workflowRunRepository: WorkflowRunRepository;
   private readonly _workflowRunNodeRepository: WorkflowRunNodeRepository;
+  private readonly _workflowRunNodeProcessGroupRepository: WorkflowRunNodeProcessGroupRepository;
   private readonly _executionEnvironmentRepository: ExecutionEnvironmentRepository;
   private readonly _workflowRunStateWriter: WorkflowRunStateWriter;
   private readonly _loader: WorkflowRunLoader;
@@ -24,6 +29,9 @@ export class WorkflowStopFinalizerHandler {
   constructor(database: Kysely<Database>) {
     this._workflowRunRepository = new WorkflowRunRepository(database);
     this._workflowRunNodeRepository = new WorkflowRunNodeRepository(database);
+    this._workflowRunNodeProcessGroupRepository = new WorkflowRunNodeProcessGroupRepository(
+      database,
+    );
     this._executionEnvironmentRepository = new ExecutionEnvironmentRepository(database);
     this._workflowRunStateWriter = new WorkflowRunStateWriter(database);
     this._loader = new WorkflowRunLoader(database);
@@ -74,10 +82,17 @@ export class WorkflowStopFinalizerHandler {
       );
       const interruptedNodes = workflowRunNodes.filter((node) => node.status === 'running');
       for (const interruptedNode of interruptedNodes) {
-        if (interruptedNode.pgid === null) {
-          continue;
+        const processGroups =
+          await this._workflowRunNodeProcessGroupRepository.findManyByWorkflowRunNodeId(
+            interruptedNode.id,
+          );
+        for (const processGroup of processGroups) {
+          await ProcessGroupRegistry.stopGroup(processGroup.pgid);
+          await this._workflowRunStateWriter.markNodeProcessGroupStopped(
+            interruptedNode,
+            processGroup.pgid,
+          );
         }
-        await ProcessGroupRegistry.stopGroup(interruptedNode.pgid);
       }
       const warning = await cleanupStoppedRun({
         cwd: executionEnvironment.path,

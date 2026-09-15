@@ -153,7 +153,8 @@ function formatEnvironmentKind(environment: ExecutionEnvironment | null): string
 }
 
 export function renderWorkflowStatusResult(workflowStatusResult: WorkflowStatusResult): void {
-  const { run, runIsDead, environment, nodes, events } = workflowStatusResult;
+  const { run, runIsDead, environment, nodes, events, hasInterruptedProcessGroup } =
+    workflowStatusResult;
   const {
     id: workflowRunId,
     workflow_id: workflowId,
@@ -195,9 +196,6 @@ export function renderWorkflowStatusResult(workflowStatusResult: WorkflowStatusR
   renderNodesSection(nodes, failureReasonByNodeId);
   renderEventsSection(workflowRunId, events);
 
-  const hasInterruptedProcessGroup = nodes.some(
-    (node) => node.status === 'running' && node.pgid !== null,
-  );
   const deadRunNeedsStop = runIsDead && hasInterruptedProcessGroup;
   const stopNeedsRetry = status === 'stop_failed' || (status === 'stopping' && runIsDead);
 

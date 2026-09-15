@@ -5,6 +5,7 @@ import type { Kysely } from 'kysely';
 import type { Database } from '#database/schema.js';
 import { ProjectRepository, type Project } from '#project/repository.js';
 import {
+  WorkflowRunNodeProcessGroupRepository,
   WorkflowRunNodeRepository,
   WorkflowRunRepository,
   type WorkflowRun,
@@ -58,6 +59,7 @@ export class WorkflowResumeHandler {
   private readonly _projectRepository: ProjectRepository;
   private readonly _workflowRunRepository: WorkflowRunRepository;
   private readonly _workflowRunNodeRepository: WorkflowRunNodeRepository;
+  private readonly _workflowRunNodeProcessGroupRepository: WorkflowRunNodeProcessGroupRepository;
   private readonly _executionEnvironmentRepository: ExecutionEnvironmentRepository;
   private readonly _loader: WorkflowRunLoader;
   private readonly _launcher: WorkflowRunLauncher;
@@ -72,6 +74,9 @@ export class WorkflowResumeHandler {
     this._projectRepository = new ProjectRepository(database);
     this._workflowRunRepository = new WorkflowRunRepository(database);
     this._workflowRunNodeRepository = new WorkflowRunNodeRepository(database);
+    this._workflowRunNodeProcessGroupRepository = new WorkflowRunNodeProcessGroupRepository(
+      database,
+    );
     this._executionEnvironmentRepository = new ExecutionEnvironmentRepository(database);
     this._loader = new WorkflowRunLoader(database);
     this._launcher = launcher;
@@ -99,8 +104,14 @@ export class WorkflowResumeHandler {
     const workflowRunNodes = await this._workflowRunNodeRepository.findManyByWorkflowRunId(
       workflowRun.id,
     );
-    const hasInterruptedProcessGroup = workflowRunNodes.some(
-      (node) => node.status === 'running' && node.pgid !== null,
+    const processGroups = await this._workflowRunNodeProcessGroupRepository.findManyByWorkflowRunId(
+      workflowRun.id,
+    );
+    const runningNodeIds = new Set(
+      workflowRunNodes.filter((node) => node.status === 'running').map((node) => node.id),
+    );
+    const hasInterruptedProcessGroup = processGroups.some((processGroup) =>
+      runningNodeIds.has(processGroup.workflow_run_node_id),
     );
     if (workflowRun.status === 'running' && hasInterruptedProcessGroup) {
       throw new WorkflowRunError(

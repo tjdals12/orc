@@ -61,6 +61,11 @@ const GrokErrorEventSchema = z.object({
   message: z.string(),
 });
 
+const GrokBackgroundTaskStartedSchema = z.object({
+  type: z.literal('BackgroundTaskStarted'),
+  pid: z.number().int().positive(),
+});
+
 type GrokEvent =
   | z.infer<typeof GrokTextEventSchema>
   | z.infer<typeof GrokToolCallEventSchema>
@@ -107,4 +112,9 @@ export function parseGrokEvent(value: unknown): GrokEventParseResult {
     default:
       return { outcome: 'unknown' };
   }
+}
+
+export function parseGrokBackgroundTaskPgid(rawOutput: unknown): number | null {
+  const backgroundTask = GrokBackgroundTaskStartedSchema.safeParse(rawOutput);
+  return backgroundTask.error ? null : backgroundTask.data.pid;
 }

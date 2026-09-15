@@ -2,6 +2,7 @@ import type { Kysely } from 'kysely';
 
 import type { Database } from '#database/schema.js';
 import {
+  WorkflowRunNodeProcessGroupRepository,
   WorkflowRunNodeRepository,
   WorkflowRunRepository,
   type WorkflowRun,
@@ -12,11 +13,15 @@ export class WorkflowRunStateWriter {
   private readonly _database: Kysely<Database>;
   private readonly _workflowRunRepository: WorkflowRunRepository;
   private readonly _workflowRunNodeRepository: WorkflowRunNodeRepository;
+  private readonly _workflowRunNodeProcessGroupRepository: WorkflowRunNodeProcessGroupRepository;
 
   constructor(database: Kysely<Database>) {
     this._database = database;
     this._workflowRunRepository = new WorkflowRunRepository(database);
     this._workflowRunNodeRepository = new WorkflowRunNodeRepository(database);
+    this._workflowRunNodeProcessGroupRepository = new WorkflowRunNodeProcessGroupRepository(
+      database,
+    );
   }
 
   async markRunStarted(workflowRun: Pick<WorkflowRun, 'id' | 'started_at'>): Promise<boolean> {
@@ -102,6 +107,16 @@ export class WorkflowRunStateWriter {
       }
 
       for (const workflowRunNode of workflowRunNodes) {
+        const processGroups =
+          await this._workflowRunNodeProcessGroupRepository.findManyByWorkflowRunNodeId(
+            workflowRunNode.id,
+            { transaction },
+          );
+        if (processGroups.length > 0) {
+          throw new Error(
+            `Workflow run node ${workflowRunNode.id} still has running process groups.`,
+          );
+        }
         const nodeStopped = await this._workflowRunNodeRepository.update(
           {
             id: workflowRunNode.id,
@@ -203,39 +218,81 @@ export class WorkflowRunStateWriter {
     workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
     pgid: number,
   ): Promise<void> {
-    const recorded = await this._workflowRunNodeRepository.update(
-      {
-        id: workflowRunNode.id,
-        workflowRunId: workflowRunNode.workflow_run_id,
-        status: 'running',
-        pgid: null,
-      },
-      { pgid },
-    );
-    if (!recorded) {
-      throw new Error(
-        `Workflow run node ${workflowRunNode.id} cannot record process group ${pgid}.`,
+    await this._database.transaction().execute(async (transaction) => {
+      const node = await transaction
+        .selectFrom('workflow_run_nodes')
+        .select(['status', 'pgid'])
+        .where('id', '=', workflowRunNode.id)
+        .where('workflow_run_id', '=', workflowRunNode.workflow_run_id)
+        .executeTakeFirst();
+      if (node?.status !== 'running') {
+        throw new Error(
+          `Workflow run node ${workflowRunNode.id} cannot record process group ${pgid}.`,
+        );
+      }
+
+      const recorded = await this._workflowRunNodeProcessGroupRepository.create(
+        workflowRunNode.id,
+        pgid,
+        { transaction },
       );
-    }
+      if (!recorded) {
+        throw new Error(
+          `Workflow run node ${workflowRunNode.id} cannot record process group ${pgid}.`,
+        );
+      }
+
+      if (node.pgid === null) {
+        await this._workflowRunNodeRepository.updateOrThrow(
+          { id: workflowRunNode.id, workflowRunId: workflowRunNode.workflow_run_id },
+          { pgid },
+          { transaction },
+        );
+      }
+    });
   }
 
   async markNodeProcessGroupStopped(
     workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
     pgid: number,
   ): Promise<void> {
-    const cleared = await this._workflowRunNodeRepository.update(
-      {
-        id: workflowRunNode.id,
-        workflowRunId: workflowRunNode.workflow_run_id,
-        status: 'running',
+    await this._database.transaction().execute(async (transaction) => {
+      const node = await transaction
+        .selectFrom('workflow_run_nodes')
+        .select(['status', 'pgid'])
+        .where('id', '=', workflowRunNode.id)
+        .where('workflow_run_id', '=', workflowRunNode.workflow_run_id)
+        .executeTakeFirst();
+      if (node?.status !== 'running') {
+        throw new Error(
+          `Workflow run node ${workflowRunNode.id} cannot clear process group ${pgid}.`,
+        );
+      }
+
+      const cleared = await this._workflowRunNodeProcessGroupRepository.delete(
+        workflowRunNode.id,
         pgid,
-      },
-      { pgid: null },
-    );
-    if (!cleared) {
-      throw new Error(
-        `Workflow run node ${workflowRunNode.id} cannot clear process group ${pgid}.`,
+        { transaction },
       );
-    }
+      if (!cleared) {
+        throw new Error(
+          `Workflow run node ${workflowRunNode.id} cannot clear process group ${pgid}.`,
+        );
+      }
+
+      if (node.pgid === pgid) {
+        const nextProcessGroup = await transaction
+          .selectFrom('workflow_run_node_process_groups')
+          .select('pgid')
+          .where('workflow_run_node_id', '=', workflowRunNode.id)
+          .orderBy('created_at', 'asc')
+          .executeTakeFirst();
+        await this._workflowRunNodeRepository.updateOrThrow(
+          { id: workflowRunNode.id, workflowRunId: workflowRunNode.workflow_run_id },
+          { pgid: nextProcessGroup?.pgid ?? null },
+          { transaction },
+        );
+      }
+    });
   }
 }
