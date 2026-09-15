@@ -1,3 +1,13 @@
+# [1.2.0](https://github.com/tjdals12/orc/compare/v1.1.0...v1.2.0) (2026-09-15)
+
+### Bug Fixes
+
+- **workflow:** stop Grok background process groups ([#8](https://github.com/tjdals12/orc/issues/8)) ([5b27c43](https://github.com/tjdals12/orc/commit/5b27c43b81fa3cb367fbae95fc3d8a3e225f9727))
+
+### Features
+
+- **workflow:** add resumable stop command ([#6](https://github.com/tjdals12/orc/issues/6)) ([a1c6d6c](https://github.com/tjdals12/orc/commit/a1c6d6c48cebc856a9adad87a5da564d33e4046e))
+
 # [1.2.0-next.2](https://github.com/tjdals12/orc/compare/v1.2.0-next.1...v1.2.0-next.2) (2026-09-15)
 
 ### Bug Fixes
