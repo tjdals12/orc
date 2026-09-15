@@ -336,6 +336,16 @@ function renderExecutionStoppedLine(execution: WorkflowExecutionResult): void {
     console.error(`${style.error(symbols.fail)} Cancelled`);
     return;
   }
+  if (execution.outcome === 'stopped') {
+    console.error(`${style.warn(symbols.warn)} Stopped`);
+    return;
+  }
+  if (execution.outcome === 'stop-failed') {
+    console.error(
+      `${style.error(symbols.fail)} Stop failed  ${style.muted(`·  ${execution.reason}`)}`,
+    );
+    return;
+  }
   execution satisfies never;
 }
 

@@ -5,6 +5,7 @@ import type { Kysely } from 'kysely';
 import type { Database } from '#database/schema.js';
 import { ProjectRepository, type Project } from '#project/repository.js';
 import {
+  WorkflowRunNodeProcessGroupRepository,
   WorkflowRunNodeRepository,
   WorkflowRunRepository,
   type WorkflowRun,
@@ -58,6 +59,7 @@ export class WorkflowResumeHandler {
   private readonly _projectRepository: ProjectRepository;
   private readonly _workflowRunRepository: WorkflowRunRepository;
   private readonly _workflowRunNodeRepository: WorkflowRunNodeRepository;
+  private readonly _workflowRunNodeProcessGroupRepository: WorkflowRunNodeProcessGroupRepository;
   private readonly _executionEnvironmentRepository: ExecutionEnvironmentRepository;
   private readonly _loader: WorkflowRunLoader;
   private readonly _launcher: WorkflowRunLauncher;
@@ -72,6 +74,9 @@ export class WorkflowResumeHandler {
     this._projectRepository = new ProjectRepository(database);
     this._workflowRunRepository = new WorkflowRunRepository(database);
     this._workflowRunNodeRepository = new WorkflowRunNodeRepository(database);
+    this._workflowRunNodeProcessGroupRepository = new WorkflowRunNodeProcessGroupRepository(
+      database,
+    );
     this._executionEnvironmentRepository = new ExecutionEnvironmentRepository(database);
     this._loader = new WorkflowRunLoader(database);
     this._launcher = launcher;
@@ -99,6 +104,20 @@ export class WorkflowResumeHandler {
     const workflowRunNodes = await this._workflowRunNodeRepository.findManyByWorkflowRunId(
       workflowRun.id,
     );
+    const processGroups = await this._workflowRunNodeProcessGroupRepository.findManyByWorkflowRunId(
+      workflowRun.id,
+    );
+    const runningNodeIds = new Set(
+      workflowRunNodes.filter((node) => node.status === 'running').map((node) => node.id),
+    );
+    const hasInterruptedProcessGroup = processGroups.some((processGroup) =>
+      runningNodeIds.has(processGroup.workflow_run_node_id),
+    );
+    if (workflowRun.status === 'running' && hasInterruptedProcessGroup) {
+      throw new WorkflowRunError(
+        `Workflow run ${workflowRun.id} has interrupted process groups. Run "orc workflow stop ${workflowRun.id}" before resuming it.`,
+      );
+    }
     const remainingNodes = workflowRunNodes.filter((node) => node.status !== 'succeeded');
 
     const workflowDeclaresArtifacts = workflow.declaresArtifacts();
@@ -167,6 +186,8 @@ export class WorkflowResumeHandler {
       case 'executed':
         return (
           result.outcome.execution.outcome === 'failed' ||
+          result.outcome.execution.outcome === 'stopped' ||
+          result.outcome.execution.outcome === 'stop-failed' ||
           result.outcome.execution.outcome === 'cancelled'
         );
     }
@@ -178,6 +199,16 @@ export class WorkflowResumeHandler {
         `Workflow run ${workflowRun.id} was cancelled. Start a new run instead.`,
       );
     }
+    if (workflowRun.status === 'stopping') {
+      throw new WorkflowRunError(
+        `Workflow run ${workflowRun.id} is still stopping. Wait for it to become stopped before resuming it.`,
+      );
+    }
+    if (workflowRun.status === 'stop_failed') {
+      throw new WorkflowRunError(
+        `Workflow run ${workflowRun.id} could not be stopped safely. Retry "orc workflow stop ${workflowRun.id}" before resuming it.`,
+      );
+    }
     if (workflowRun.status === 'pending') {
       throw new WorkflowRunError(
         `Workflow run ${workflowRun.id} has not started. It may still be provisioning — check "orc workflow status ${workflowRun.id}".`,
@@ -187,11 +218,11 @@ export class WorkflowResumeHandler {
       const liveness = resolveWorkflowRunLiveness(workflowRun);
       if (liveness === 'alive') {
         throw new WorkflowRunError(
-          `Workflow run ${workflowRun.id} is still running. Run "orc workflow cancel ${workflowRun.id}" to stop it, or wait for it to finish.`,
+          `Workflow run ${workflowRun.id} is still running. Run "orc workflow stop ${workflowRun.id}" to stop it resumably, or wait for it to finish.`,
         );
       }
     }
-    if (workflowRun.started_at === null) {
+    if (workflowRun.started_at === null && workflowRun.status !== 'stopped') {
       throw new WorkflowRunError(
         `Workflow run ${workflowRun.id} failed during provisioning. Start a new run instead.`,
       );
@@ -259,6 +290,7 @@ export class WorkflowResumeHandler {
           {
             status: 'pending',
             attempt: workflowRunNode.attempt + 1,
+            pgid: null,
             reason: null,
             started_at: null,
             finished_at: null,

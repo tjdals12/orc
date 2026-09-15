@@ -1,9 +1,12 @@
+import util from 'node:util';
+
 import type { Workflow } from '#workflow/workflow.js';
 
 import type { WorkflowRunRecorder } from '../recorder.js';
 import type { WorkflowRun, WorkflowRunNode } from '../repository.js';
+import { cleanupStoppedRun } from '../stop-cleanup.js';
 
-import { WorkflowRunCancellationWatch } from './cancellation-watch.js';
+import { WorkflowRunControlWatch } from './run-control-watch.js';
 import { WorkflowRunNodeExecutor } from './node-executor.js';
 import { WorkflowRunScheduler } from './scheduler.js';
 import type {
@@ -52,6 +55,26 @@ export class WorkflowRunExecutor {
 
     const started = await this.startRun(workflowRun);
     if (!started) {
+      const state = await this._checkWorkflowRunState();
+      if (state === 'stopping') {
+        await this._workflowRunRecorder.recordEvent({ type: 'run_stop_requested' });
+        try {
+          const warning = await cleanupStoppedRun({
+            cwd,
+            artifactsDirPath,
+            workflowNodes: workflow.nodes,
+            interruptedNodeIds: [],
+          });
+          await this._workflowRunStateWriter.markRunStopped(workflowRun.id, []);
+          await this._workflowRunRecorder.recordEvent({ type: 'run_stopped', warning });
+          return { outcome: 'stopped', nodeIds: [], warning };
+        } catch (e) {
+          const reason = e instanceof Error ? e.message : util.inspect(e);
+          await this._workflowRunStateWriter.markRunStopFailed(workflowRun.id);
+          await this._workflowRunRecorder.recordEvent({ type: 'run_stop_failed', reason });
+          return { outcome: 'stop-failed', reason };
+        }
+      }
       await this.cancelRun(workflowRun);
       const workflowExecutionResult: WorkflowExecutionResult = {
         outcome: 'cancelled',
@@ -61,6 +84,7 @@ export class WorkflowRunExecutor {
 
     let firstFailure: { nodeId: string; reason: string } | null = null;
     let firstUnexpectedError: { error: unknown } | null = null;
+    const interruptedNodeIds: string[] = [];
 
     const pendingApprovals: PendingApproval[] = [];
     for (const workflowRunNode of workflowRunNodes) {
@@ -72,7 +96,7 @@ export class WorkflowRunExecutor {
       }
     }
 
-    const cancellationWatch = new WorkflowRunCancellationWatch(this._checkWorkflowRunState);
+    const runControlWatch = new WorkflowRunControlWatch(this._checkWorkflowRunState);
 
     const nodeExecutor = new WorkflowRunNodeExecutor({
       workflowRunStateWriter: this._workflowRunStateWriter,
@@ -80,7 +104,7 @@ export class WorkflowRunExecutor {
       cwd,
       artifactsDirPath,
       input: workflowRun.input ?? '',
-      signal: cancellationWatch.signal,
+      signal: runControlWatch.signal,
     });
 
     const runNode = async (nodeId: string): Promise<FinishedNode> => {
@@ -110,15 +134,15 @@ export class WorkflowRunExecutor {
       runNode,
     });
 
-    cancellationWatch.start();
+    runControlWatch.start();
     try {
       scheduler.launchReadyNodes();
 
       while (scheduler.hasRunningNodes()) {
         const finishedNode = await scheduler.takeFinishedNode();
 
-        await cancellationWatch.observe();
-        if (cancellationWatch.hasStopped()) {
+        await runControlWatch.observe();
+        if (runControlWatch.hasInterrupted()) {
           scheduler.stopLaunching();
         }
 
@@ -134,6 +158,9 @@ export class WorkflowRunExecutor {
             firstFailure = { nodeId: finishedNode.nodeId, reason: finishedNode.reason };
           }
           scheduler.stopLaunching();
+        } else if (finishedNode.outcome === 'stopped') {
+          interruptedNodeIds.push(finishedNode.nodeId);
+          scheduler.stopLaunching();
         } else if (finishedNode.outcome === 'errored') {
           if (firstUnexpectedError === null) {
             firstUnexpectedError = { error: finishedNode.error };
@@ -146,20 +173,53 @@ export class WorkflowRunExecutor {
         scheduler.launchReadyNodes();
       }
     } finally {
-      cancellationWatch.stop();
+      runControlWatch.stop();
     }
 
-    const unexpectedError = firstUnexpectedError ?? cancellationWatch.unexpectedError;
+    const unexpectedError = firstUnexpectedError ?? runControlWatch.unexpectedError;
     if (unexpectedError !== null) {
       throw unexpectedError.error;
     }
 
-    if (cancellationWatch.isCancelled()) {
+    if (runControlWatch.isCancelled()) {
       await this.cancelRun(workflowRun);
       const workflowExecutionResult: WorkflowExecutionResult = {
         outcome: 'cancelled',
       };
       return workflowExecutionResult;
+    }
+
+    if (runControlWatch.isStopRequested()) {
+      await this._workflowRunRecorder.recordEvent({ type: 'run_stop_requested' });
+      try {
+        const warning = await cleanupStoppedRun({
+          cwd,
+          artifactsDirPath,
+          workflowNodes: workflow.nodes,
+          interruptedNodeIds,
+        });
+
+        const interruptedNodes = workflowRunNodes.filter((node) =>
+          interruptedNodeIds.includes(node.node_id),
+        );
+        await this._workflowRunStateWriter.markRunStopped(workflowRun.id, interruptedNodes);
+
+        for (const interruptedNode of interruptedNodes) {
+          await this._workflowRunRecorder.recordEvent({
+            type: 'node_stopped',
+            nodeId: interruptedNode.node_id,
+          });
+        }
+
+        await this._workflowRunRecorder.recordEvent({ type: 'run_stopped', warning });
+
+        return { outcome: 'stopped', nodeIds: interruptedNodeIds, warning };
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : util.inspect(e);
+        await this._workflowRunStateWriter.markRunStopFailed(workflowRun.id);
+        await this._workflowRunRecorder.recordEvent({ type: 'run_stop_failed', reason });
+        return { outcome: 'stop-failed', reason };
+      }
     }
 
     if (firstFailure !== null) {

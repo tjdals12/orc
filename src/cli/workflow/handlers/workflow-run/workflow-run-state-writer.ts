@@ -2,6 +2,7 @@ import type { Kysely } from 'kysely';
 
 import type { Database } from '#database/schema.js';
 import {
+  WorkflowRunNodeProcessGroupRepository,
   WorkflowRunNodeRepository,
   WorkflowRunRepository,
   type WorkflowRun,
@@ -9,12 +10,18 @@ import {
 } from '#workflow-run/repository.js';
 
 export class WorkflowRunStateWriter {
+  private readonly _database: Kysely<Database>;
   private readonly _workflowRunRepository: WorkflowRunRepository;
   private readonly _workflowRunNodeRepository: WorkflowRunNodeRepository;
+  private readonly _workflowRunNodeProcessGroupRepository: WorkflowRunNodeProcessGroupRepository;
 
   constructor(database: Kysely<Database>) {
+    this._database = database;
     this._workflowRunRepository = new WorkflowRunRepository(database);
     this._workflowRunNodeRepository = new WorkflowRunNodeRepository(database);
+    this._workflowRunNodeProcessGroupRepository = new WorkflowRunNodeProcessGroupRepository(
+      database,
+    );
   }
 
   async markRunStarted(workflowRun: Pick<WorkflowRun, 'id' | 'started_at'>): Promise<boolean> {
@@ -82,6 +89,58 @@ export class WorkflowRunStateWriter {
       },
     );
     return paused;
+  }
+
+  async markRunStopped(
+    workflowRunId: string,
+    workflowRunNodes: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>[],
+  ): Promise<void> {
+    const finishedAt = new Date().toISOString();
+    await this._database.transaction().execute(async (transaction) => {
+      const stopped = await this._workflowRunRepository.update(
+        { id: workflowRunId, status: 'stopping' },
+        { status: 'stopped', pid: null, finished_at: finishedAt },
+        { transaction },
+      );
+      if (!stopped) {
+        throw new Error(`Workflow run ${workflowRunId} is no longer stopping.`);
+      }
+
+      for (const workflowRunNode of workflowRunNodes) {
+        const processGroups =
+          await this._workflowRunNodeProcessGroupRepository.findManyByWorkflowRunNodeId(
+            workflowRunNode.id,
+            { transaction },
+          );
+        if (processGroups.length > 0) {
+          throw new Error(
+            `Workflow run node ${workflowRunNode.id} still has running process groups.`,
+          );
+        }
+        const nodeStopped = await this._workflowRunNodeRepository.update(
+          {
+            id: workflowRunNode.id,
+            workflowRunId: workflowRunNode.workflow_run_id,
+            status: 'running',
+          },
+          { status: 'stopped', pgid: null, finished_at: finishedAt },
+          { transaction },
+        );
+        if (!nodeStopped) {
+          throw new Error(`Workflow run node ${workflowRunNode.id} is no longer running.`);
+        }
+      }
+    });
+  }
+
+  async markRunStopFailed(workflowRunId: string): Promise<void> {
+    const stopFailed = await this._workflowRunRepository.update(
+      { id: workflowRunId, status: 'stopping' },
+      { status: 'stop_failed', pid: null, finished_at: new Date().toISOString() },
+    );
+    if (!stopFailed) {
+      throw new Error(`Workflow run ${workflowRunId} is no longer stopping.`);
+    }
   }
 
   async markRunFinished(workflowRunId: string): Promise<void> {
@@ -153,5 +212,87 @@ export class WorkflowRunStateWriter {
         finished_at: new Date().toISOString(),
       },
     );
+  }
+
+  async markNodeProcessGroupStarted(
+    workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
+    pgid: number,
+  ): Promise<void> {
+    await this._database.transaction().execute(async (transaction) => {
+      const node = await transaction
+        .selectFrom('workflow_run_nodes')
+        .select(['status', 'pgid'])
+        .where('id', '=', workflowRunNode.id)
+        .where('workflow_run_id', '=', workflowRunNode.workflow_run_id)
+        .executeTakeFirst();
+      if (node?.status !== 'running') {
+        throw new Error(
+          `Workflow run node ${workflowRunNode.id} cannot record process group ${pgid}.`,
+        );
+      }
+
+      const recorded = await this._workflowRunNodeProcessGroupRepository.create(
+        workflowRunNode.id,
+        pgid,
+        { transaction },
+      );
+      if (!recorded) {
+        throw new Error(
+          `Workflow run node ${workflowRunNode.id} cannot record process group ${pgid}.`,
+        );
+      }
+
+      if (node.pgid === null) {
+        await this._workflowRunNodeRepository.updateOrThrow(
+          { id: workflowRunNode.id, workflowRunId: workflowRunNode.workflow_run_id },
+          { pgid },
+          { transaction },
+        );
+      }
+    });
+  }
+
+  async markNodeProcessGroupStopped(
+    workflowRunNode: Pick<WorkflowRunNode, 'id' | 'workflow_run_id'>,
+    pgid: number,
+  ): Promise<void> {
+    await this._database.transaction().execute(async (transaction) => {
+      const node = await transaction
+        .selectFrom('workflow_run_nodes')
+        .select(['status', 'pgid'])
+        .where('id', '=', workflowRunNode.id)
+        .where('workflow_run_id', '=', workflowRunNode.workflow_run_id)
+        .executeTakeFirst();
+      if (node?.status !== 'running') {
+        throw new Error(
+          `Workflow run node ${workflowRunNode.id} cannot clear process group ${pgid}.`,
+        );
+      }
+
+      const cleared = await this._workflowRunNodeProcessGroupRepository.delete(
+        workflowRunNode.id,
+        pgid,
+        { transaction },
+      );
+      if (!cleared) {
+        throw new Error(
+          `Workflow run node ${workflowRunNode.id} cannot clear process group ${pgid}.`,
+        );
+      }
+
+      if (node.pgid === pgid) {
+        const nextProcessGroup = await transaction
+          .selectFrom('workflow_run_node_process_groups')
+          .select('pgid')
+          .where('workflow_run_node_id', '=', workflowRunNode.id)
+          .orderBy('created_at', 'asc')
+          .executeTakeFirst();
+        await this._workflowRunNodeRepository.updateOrThrow(
+          { id: workflowRunNode.id, workflowRunId: workflowRunNode.workflow_run_id },
+          { pgid: nextProcessGroup?.pgid ?? null },
+          { transaction },
+        );
+      }
+    });
   }
 }

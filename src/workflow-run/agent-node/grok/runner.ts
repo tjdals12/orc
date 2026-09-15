@@ -4,7 +4,7 @@ import type { Readable } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
 import util from 'node:util';
 
-import { ProcessGroupRegistry } from '#shared/process-group-registry.js';
+import { ProcessGroupRegistry, type ProcessGroupObserver } from '#shared/process-group-registry.js';
 import { buildPreview, collapseWhitespace } from '#shared/text.js';
 import { checkGrokCliCompatibility } from '#installation/provider/grok/version-check.js';
 
@@ -12,12 +12,14 @@ import { detectCompletionSignal } from '../completion-signal.js';
 import { JsonLinesParseError, parseJsonLines } from '../json-lines.js';
 import { PREVIEW_LIMIT, tryDecodeOutputText } from '../output-text.js';
 import type { AgentRunResult, RecordAgentOutput, RecordAgentSession } from '../types.js';
-import { parseGrokEvent } from './contract.js';
+import { parseGrokBackgroundTaskPgid, parseGrokEvent } from './contract.js';
 
 type GrokProcessExit =
   | { outcome: 'spawn-failed'; message: string }
   | { outcome: 'exited'; code: number | null }
   | { outcome: 'killed'; signal: NodeJS.Signals };
+
+const SIGINT_GRACE_MS = 5000;
 
 function buildGrokArgs(options: {
   model: string;
@@ -105,6 +107,7 @@ export async function runGrokNode(options: {
   recordOutput: RecordAgentOutput;
   recordSession: RecordAgentSession;
   abortSignal: AbortSignal;
+  processGroupObserver: ProcessGroupObserver;
 }): Promise<AgentRunResult> {
   const {
     model,
@@ -116,6 +119,7 @@ export async function runGrokNode(options: {
     recordOutput,
     recordSession,
     abortSignal,
+    processGroupObserver,
   } = options;
 
   const compatibility = await checkGrokCliCompatibility();
@@ -171,11 +175,45 @@ export async function runGrokNode(options: {
     return agentRunResult;
   }
 
-  ProcessGroupRegistry.register(child);
-  const stopOnAbort = (): void => {
-    ProcessGroupRegistry.stop(child);
+  let stopRequested = false;
+  let sigintGraceTimer: NodeJS.Timeout | null = null;
+  const backgroundProcessGroups = new Set<number>();
+  const recordedBackgroundProcessGroups = new Set<number>();
+  const backgroundStopPromises = new Map<number, Promise<void>>();
+  const stopBackgroundProcessGroup = (pgid: number): void => {
+    if (backgroundStopPromises.has(pgid)) return;
+    const stopped = ProcessGroupRegistry.stopGroup(pgid).then(async () => {
+      if (recordedBackgroundProcessGroups.has(pgid)) {
+        await processGroupObserver.onProcessGroupStopped(pgid);
+      }
+    });
+    void stopped.catch(() => undefined);
+    backgroundStopPromises.set(pgid, stopped);
   };
-  abortSignal.addEventListener('abort', stopOnAbort, { once: true });
+  const stopGrokCli = (): void => {
+    if (stopRequested) return;
+    stopRequested = true;
+
+    for (const pgid of backgroundProcessGroups) {
+      stopBackgroundProcessGroup(pgid);
+    }
+
+    try {
+      child.kill('SIGINT');
+    } catch {
+      return;
+    }
+
+    sigintGraceTimer = setTimeout(() => {
+      ProcessGroupRegistry.stop(child);
+    }, SIGINT_GRACE_MS);
+    sigintGraceTimer.unref();
+  };
+  ProcessGroupRegistry.register(child);
+  const pgid = child.pid;
+  let pgidRecorded = false;
+  abortSignal.addEventListener('abort', stopGrokCli, { once: true });
+  if (abortSignal.aborted) stopGrokCli();
 
   const toolNameById = new Map<string, string>();
   const proseLines: string[] = [];
@@ -208,6 +246,10 @@ export async function runGrokNode(options: {
   const stderrCollected = collectStderr(child.stderr);
 
   try {
+    if (pgid !== undefined) {
+      await processGroupObserver.onProcessGroupStarted(pgid);
+      pgidRecorded = true;
+    }
     const events = parseJsonLines(child.stdout);
 
     for await (const value of events) {
@@ -236,6 +278,16 @@ export async function runGrokNode(options: {
           const status = event.status;
           const isFinalUpdate = status === 'completed' || status === 'failed';
           if (isFinalUpdate) {
+            const backgroundPgid = parseGrokBackgroundTaskPgid(event.rawOutput);
+            if (backgroundPgid !== null) {
+              const shouldAddProcessGroup = !backgroundProcessGroups.has(backgroundPgid);
+              backgroundProcessGroups.add(backgroundPgid);
+              if (shouldAddProcessGroup) {
+                await processGroupObserver.onProcessGroupStarted(backgroundPgid);
+                recordedBackgroundProcessGroups.add(backgroundPgid);
+              }
+              if (stopRequested) stopBackgroundProcessGroup(backgroundPgid);
+            }
             const toolName = toolNameById.get(event.toolCallId) ?? 'unknown';
             await recordOutput({
               provider: 'grok',
@@ -323,7 +375,7 @@ export async function runGrokNode(options: {
     const agentRunResult: AgentRunResult = { outcome: 'succeeded', signalDetected };
     return agentRunResult;
   } catch (error) {
-    ProcessGroupRegistry.stop(child);
+    stopGrokCli();
     await Promise.allSettled([exitReported, stderrCollected]);
     if (abortSignal.aborted) {
       const agentRunResult: AgentRunResult = {
@@ -346,6 +398,14 @@ export async function runGrokNode(options: {
     };
     return agentRunResult;
   } finally {
-    abortSignal.removeEventListener('abort', stopOnAbort);
+    abortSignal.removeEventListener('abort', stopGrokCli);
+    if (sigintGraceTimer !== null) clearTimeout(sigintGraceTimer);
+    for (const backgroundPgid of backgroundProcessGroups) {
+      stopBackgroundProcessGroup(backgroundPgid);
+    }
+    if (pgid !== undefined && pgidRecorded) {
+      await processGroupObserver.onProcessGroupStopped(pgid);
+    }
+    await Promise.all(backgroundStopPromises.values());
   }
 }

@@ -1,5 +1,6 @@
 import type { AgentNode } from '#workflow/node/agent-node.js';
 import type { LoopCompletion } from '#workflow/node/loop.js';
+import type { ProcessGroupObserver } from '#shared/process-group-registry.js';
 
 import { runBashScript, type BashScriptOptions } from '#shared/bash-script.js';
 import type { AgentOnReject } from '#workflow/node/on-reject.js';
@@ -24,6 +25,7 @@ type AgentInvocationOptions = {
   recordOutput: RecordAgentOutput;
   recordSession: RecordAgentSession;
   abortSignal: AbortSignal;
+  processGroupObserver: ProcessGroupObserver;
 };
 
 async function runAgentInvocation(
