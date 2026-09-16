@@ -1,56 +1,158 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { setTimeout } from 'node:timers/promises';
 
 import type { Kysely } from 'kysely';
 
-import type { Database } from '#database/schema.js';
-import type { Workflow } from '#workflow/workflow.js';
-import {
-  WorkflowRunRepository,
-  type WorkflowRun,
-  type WorkflowRunNode,
-} from '#workflow-run/repository.js';
+import type { Database, WorkflowRunStatus } from '#database/schema.js';
+import { WorkflowRunRepository } from '#workflow-run/repository.js';
 import { WorkflowRunError } from '#workflow-run/error.js';
 import type { WorkflowRunRecorder } from '#workflow-run/recorder.js';
-import { WorkflowRunExecutor } from '#workflow-run/executor/run-executor.js';
-import type { WorkflowRunExecutionState } from '#workflow-run/executor/types.js';
-import type { WorkflowExecutionResult } from '#workflow-run/executor/types.js';
 
-import { WorkflowRunStateWriter } from './workflow-run-state-writer.js';
 import { ProcessGroupRegistry } from '#shared/process-group-registry.js';
 
-type ProvisionedWorkflowRun = {
-  cwd: string;
-  artifactsDirPath: string;
-  workflow: Workflow;
-  workflowRun: WorkflowRun;
-  workflowRunNodes: WorkflowRunNode[];
-  maxConcurrentNodes: number;
+type DetachedCommand = {
+  child: ChildProcess;
+  pid: number;
 };
+
+type EndedWorkflowRunStatus = Exclude<WorkflowRunStatus, 'pending' | 'running' | 'stopping'>;
+
+export type WorkflowWorkerLaunchResult =
+  | { outcome: 'running'; workerPid: number }
+  | { outcome: 'ended'; workerPid: number; status: EndedWorkflowRunStatus }
+  | { outcome: 'interrupted' };
 
 export class WorkflowRunLauncher {
   private readonly _workflowRunRepository: WorkflowRunRepository;
-  private readonly _workflowRunStateWriter: WorkflowRunStateWriter;
-  private readonly _onCancelling: () => void;
 
-  constructor(database: Kysely<Database>, onCancelling: () => void) {
+  constructor(database: Kysely<Database>) {
     this._workflowRunRepository = new WorkflowRunRepository(database);
-    this._workflowRunStateWriter = new WorkflowRunStateWriter(database);
-    this._onCancelling = onCancelling;
-  }
-
-  spawnWorker(workflowRunId: string): number {
-    return this.spawnDetachedCommand('__worker', workflowRunId, 'workflow run worker');
   }
 
   spawnStopFinalizer(workflowRunId: string): number {
-    return this.spawnDetachedCommand('__stop-finalizer', workflowRunId, 'workflow stop finalizer');
+    const command = this.spawnDetachedCommand(
+      '__stop-finalizer',
+      workflowRunId,
+      'workflow stop finalizer',
+    );
+    return command.pid;
+  }
+
+  async launchWorker(args: {
+    workflowRunId: string;
+    workflowRunRecorder: WorkflowRunRecorder;
+    signal?: AbortSignal;
+  }): Promise<WorkflowWorkerLaunchResult> {
+    const { workflowRunId, workflowRunRecorder, signal } = args;
+    const command = this.spawnDetachedCommand('__worker', workflowRunId, 'workflow run worker');
+
+    const workerState: {
+      error: Error | null;
+      exit: { code: number | null; signal: NodeJS.Signals | null } | null;
+    } = { error: null, exit: null };
+    command.child.once('error', (error) => {
+      workerState.error = error;
+    });
+    command.child.once('exit', (code, exitSignal) => {
+      workerState.exit = { code, signal: exitSignal };
+    });
+
+    while (true) {
+      const workflowRun = await this._workflowRunRepository.findById(workflowRunId);
+      if (workflowRun === null) {
+        ProcessGroupRegistry.kill(command.child);
+        throw new WorkflowRunError(`No workflow run "${workflowRunId}".`);
+      }
+
+      if (workflowRun.status === 'running') {
+        if (workflowRun.pid !== command.pid) {
+          ProcessGroupRegistry.kill(command.child);
+          const recordedPid = workflowRun.pid === null ? 'no PID' : `process ${workflowRun.pid}`;
+          throw new WorkflowRunError(
+            `Workflow run ${workflowRun.id} was claimed with ${recordedPid} instead of process ${command.pid}.`,
+          );
+        }
+        return { outcome: 'running', workerPid: command.pid };
+      }
+
+      if (workflowRun.status !== 'pending' && workflowRun.status !== 'stopping') {
+        return {
+          outcome: 'ended',
+          workerPid: command.pid,
+          status: workflowRun.status,
+        };
+      }
+
+      const interrupted = signal !== undefined && signal.aborted;
+      if (interrupted) {
+        if (workflowRun.status === 'pending') {
+          const cancelled = await this._workflowRunRepository.update(
+            { id: workflowRun.id, status: 'pending' },
+            { status: 'cancelled', finished_at: new Date().toISOString() },
+          );
+          if (cancelled) {
+            ProcessGroupRegistry.kill(command.child);
+            await workflowRunRecorder.recordEvent({ type: 'run_cancelled' });
+          }
+        }
+        return { outcome: 'interrupted' };
+      }
+
+      const { error: workerError, exit: workerExit } = workerState;
+      if (workerError !== null) {
+        const reason = `Failed to start the workflow run worker. ${workerError.message}`;
+        if (workflowRun.status === 'stopping') {
+          throw new WorkflowRunError(reason);
+        }
+
+        const failed = await this._workflowRunRepository.update(
+          { id: workflowRun.id, status: 'pending' },
+          { status: 'failed', finished_at: new Date().toISOString() },
+        );
+        if (failed) {
+          await workflowRunRecorder.recordEvent({ type: 'run_failed', reason });
+          throw new WorkflowRunError(reason);
+        }
+      } else if (workerExit !== null) {
+        let exitDetail: string;
+        if (workerExit.signal !== null) {
+          exitDetail = workerExit.signal;
+        } else if (workerExit.code !== null) {
+          exitDetail = `code ${workerExit.code}`;
+        } else {
+          exitDetail = 'code unknown';
+        }
+        const reason = `The workflow run worker exited before claiming run ${workflowRun.id} (${exitDetail}).`;
+        if (workflowRun.status === 'stopping') {
+          throw new WorkflowRunError(reason);
+        }
+
+        const failed = await this._workflowRunRepository.update(
+          { id: workflowRun.id, status: 'pending' },
+          { status: 'failed', finished_at: new Date().toISOString() },
+        );
+        if (failed) {
+          await workflowRunRecorder.recordEvent({ type: 'run_failed', reason });
+          throw new WorkflowRunError(reason);
+        }
+      } else {
+        try {
+          await setTimeout(100, undefined, { signal });
+        } catch (e) {
+          const pollWasInterrupted = e instanceof Error && e.name === 'AbortError';
+          if (!pollWasInterrupted) {
+            throw e;
+          }
+        }
+      }
+    }
   }
 
   private spawnDetachedCommand(
     command: string,
     workflowRunId: string,
     processName: string,
-  ): number {
+  ): DetachedCommand {
     const entryPath = process.argv[1];
     if (entryPath === undefined) {
       throw new WorkflowRunError(`Failed to resolve the CLI entry point for the ${processName}.`);
@@ -70,61 +172,6 @@ export class WorkflowRunLauncher {
     if (workerPid === undefined) {
       throw new WorkflowRunError(`Failed to start the ${processName}.`);
     }
-    return workerPid;
-  }
-
-  async attach(
-    provisioned: ProvisionedWorkflowRun,
-    workflowRunRecorder: WorkflowRunRecorder,
-  ): Promise<WorkflowExecutionResult> {
-    const killNodesAndExit = (): void => {
-      ProcessGroupRegistry.killAll();
-      process.exit(130);
-    };
-
-    const requestCancellation = (): void => {
-      void this._workflowRunRepository.update(
-        { id: provisioned.workflowRun.id, status: { in: ['pending', 'running'] } },
-        { status: 'cancelled' },
-      );
-      this._onCancelling();
-      process.once('SIGINT', killNodesAndExit);
-      process.once('SIGTERM', killNodesAndExit);
-    };
-    process.once('SIGINT', requestCancellation);
-    process.once('SIGTERM', requestCancellation);
-
-    const workflowRunExecutor = new WorkflowRunExecutor(
-      this._workflowRunStateWriter,
-      workflowRunRecorder,
-      () => this.checkRunState(provisioned.workflowRun.id),
-    );
-
-    try {
-      const executionResult = await workflowRunExecutor.execute(provisioned);
-      return executionResult;
-    } finally {
-      process.off('SIGINT', requestCancellation);
-      process.off('SIGTERM', requestCancellation);
-      process.off('SIGINT', killNodesAndExit);
-      process.off('SIGTERM', killNodesAndExit);
-    }
-  }
-
-  private async checkRunState(workflowRunId: string): Promise<WorkflowRunExecutionState> {
-    const workflowRun = await this._workflowRunRepository.findById(workflowRunId);
-    if (!workflowRun) {
-      return 'deleted';
-    }
-
-    if (workflowRun.status === 'cancelled') {
-      return 'cancelled';
-    }
-
-    if (workflowRun.status === 'stopping') {
-      return 'stopping';
-    }
-
-    return 'running';
+    return { child, pid: workerPid };
   }
 }

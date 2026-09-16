@@ -7,6 +7,8 @@ import type {
 } from '#workflow-run/repository.js';
 import type { WorkflowExecutionResult } from '#workflow-run/executor/types.js';
 
+export type WorkflowRunSignal = 'SIGINT' | 'SIGTERM' | 'SIGHUP';
+
 export type WorkflowRunPlan = {
   projectName: string;
   workflowId: string;
@@ -33,6 +35,7 @@ export type WorkflowRunOutcome =
   | { kind: 'detached'; workerPid: number }
   | { kind: 'provisioning-failed'; reason: string }
   | { kind: 'cancelled' }
+  | { kind: 'interrupted'; signal: WorkflowRunSignal; exitCode: number }
   | { kind: 'executed'; execution: WorkflowExecutionResult };
 
 export type WorkflowRunResult = {

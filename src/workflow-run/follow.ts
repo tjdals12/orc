@@ -11,7 +11,7 @@ export type WorkflowRunStreamEntry =
 
 export type WorkflowRunState = 'running' | 'ended' | 'dead' | 'deleted';
 
-export type WorkflowRunFollowOutcome = 'ended' | 'dead' | 'deleted';
+export type WorkflowRunFollowOutcome = 'ended' | 'dead' | 'deleted' | 'interrupted';
 
 export function resolveEntrySequence(entry: WorkflowRunStreamEntry): number {
   if (entry.kind === 'event') {
@@ -30,12 +30,16 @@ export async function followWorkflowRun(
   options: {
     pollIntervalMs: number;
     drainGraceMs: number;
+    initialCursor?: number | null;
+    signal?: AbortSignal;
   },
 ): Promise<WorkflowRunFollowOutcome> {
-  const { pollIntervalMs, drainGraceMs } = options;
+  const { pollIntervalMs, drainGraceMs, initialCursor = null, signal } = options;
 
-  let cursor: number | null = null;
+  let cursor: number | null = initialCursor;
   let terminalEventSeen: boolean = false;
+
+  const isInterrupted = (): boolean => signal?.aborted === true;
 
   const terminalEventTypes: WorkflowRunEventType[] = [
     'run_succeeded',
@@ -69,34 +73,67 @@ export async function followWorkflowRun(
     onEntries(entries);
   };
 
-  const drainUntilTerminalEvent = async (): Promise<void> => {
+  const drainUntilTerminalEvent = async (): Promise<boolean> => {
     const maxCycles = Math.ceil(drainGraceMs / pollIntervalMs);
     for (let cycle = 0; cycle < maxCycles; cycle += 1) {
-      if (terminalEventSeen) {
-        break;
+      if (isInterrupted()) {
+        return false;
       }
-      await setTimeout(pollIntervalMs);
+      if (terminalEventSeen) {
+        return true;
+      }
+      await setTimeout(pollIntervalMs, undefined, { signal });
       await consumeNewEntries();
+      if (isInterrupted()) {
+        return false;
+      }
     }
+    return true;
   };
 
-  while (true) {
-    await consumeNewEntries();
+  try {
+    while (true) {
+      if (isInterrupted()) {
+        return 'interrupted';
+      }
 
-    const state = await checkRunState();
-    if (state === 'deleted') {
-      return 'deleted';
-    }
-    if (state === 'ended') {
-      await drainUntilTerminalEvent();
-      return 'ended';
-    }
-    if (state === 'dead') {
       await consumeNewEntries();
-      return 'dead';
-    }
-    state satisfies 'running';
 
-    await setTimeout(pollIntervalMs);
+      if (isInterrupted()) {
+        return 'interrupted';
+      }
+
+      const state = await checkRunState();
+
+      if (isInterrupted()) {
+        return 'interrupted';
+      }
+
+      if (state === 'deleted') {
+        return 'deleted';
+      }
+      if (state === 'ended') {
+        const terminalEventDrainCompleted = await drainUntilTerminalEvent();
+        if (!terminalEventDrainCompleted) {
+          return 'interrupted';
+        }
+        return 'ended';
+      }
+      if (state === 'dead') {
+        await consumeNewEntries();
+        if (isInterrupted()) {
+          return 'interrupted';
+        }
+        return 'dead';
+      }
+      state satisfies 'running';
+
+      await setTimeout(pollIntervalMs, undefined, { signal });
+    }
+  } catch (e) {
+    if (isInterrupted() && e instanceof Error && e.name === 'AbortError') {
+      return 'interrupted';
+    }
+    throw e;
   }
 }

@@ -638,15 +638,15 @@ Runs a workflow.
 orc workflow run <id> [options]
 ```
 
-| Option                | What it does                                                  |
-| --------------------- | ------------------------------------------------------------- |
-| `--input <text>`      | Text the workflow receives as `$INPUT` (1,000 characters max) |
-| `--input-file <path>` | File whose text the workflow receives as `$INPUT`             |
-| `--no-worktree`       | Run in the project directory instead of a worktree            |
-| `--base <ref>`        | Ref the worktree branch forks from (default: current HEAD)    |
-| `--branch <prefix>`   | Worktree branch prefix (default: `orc/<workflow id>`)         |
-| `--detach`            | Run in the background and return immediately                  |
-| `--json`              | Print the run and its nodes as JSON                           |
+| Option                | What it does                                                                                                                  |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `--input <text>`      | Text the workflow receives as `$INPUT` (1,000 characters max)                                                                 |
+| `--input-file <path>` | File whose text the workflow receives as `$INPUT`                                                                             |
+| `--no-worktree`       | Run in the project directory instead of a worktree                                                                            |
+| `--base <ref>`        | Ref the worktree branch forks from (default: current HEAD)                                                                    |
+| `--branch <prefix>`   | Worktree branch prefix (default: `orc/<workflow id>`)                                                                         |
+| `--detach`            | Start the run in the background and return. Print worktree hook logs                                                          |
+| `--json`              | Start the run in the background and print JSON. Suppress worktree hook logs. When used with `--detach`, `--detach` is ignored |
 
 ### `orc workflow resume`
 
@@ -656,10 +656,10 @@ Resumes a stopped or failed workflow run from its unfinished nodes. A run with s
 orc workflow resume <run-id> [options]
 ```
 
-| Option     | What it does                                 |
-| ---------- | -------------------------------------------- |
-| `--detach` | Run in the background and return immediately |
-| `--json`   | Print the run and its nodes as JSON          |
+| Option     | What it does                                                 |
+| ---------- | ------------------------------------------------------------ |
+| `--detach` | Resume the run in the background and return                  |
+| `--json`   | Resume the run in the background and print its state as JSON |
 
 ### `orc workflow approve`
 
