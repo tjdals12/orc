@@ -4,7 +4,7 @@ export type PendingApproval = { nodeId: string; message: string };
 
 export type WorkflowExecutionResult =
   | { outcome: 'succeeded'; nodeCount: number; elapsedSeconds: number }
-  | { outcome: 'failed'; nodeId: string; reason: string }
+  | { outcome: 'failed'; nodeId: string | null; reason: string }
   | { outcome: 'paused'; approvals: PendingApproval[] }
   | { outcome: 'stopped'; nodeIds: string[]; warning: string | null }
   | { outcome: 'stop-failed'; reason: string }

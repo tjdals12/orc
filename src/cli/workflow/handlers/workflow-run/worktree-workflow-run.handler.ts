@@ -5,13 +5,12 @@ import type { Kysely } from 'kysely';
 import { buildWorkflowRunPaths } from '#shared/path.js';
 
 import type { Database } from '#database/schema.js';
-import type { ExecutionEnvironment } from '#execution-environment/repository.js';
 import { ExecutionEnvironmentError } from '#execution-environment/error.js';
 import { WorkflowRunError } from '#workflow-run/error.js';
 
 import { watchInterrupt } from '#cli/interrupt-watch.js';
 import { WorkflowRunHandler } from './workflow-run.handler.js';
-import type { WorkflowRunLauncher } from './workflow-run-launcher.js';
+import type { WorkflowRunCoordinator } from './workflow-run-coordinator.js';
 import type { WorktreeEnvironmentProvisioner } from './worktree-environment-provisioner.js';
 import type {
   WorkflowRunInput,
@@ -22,18 +21,16 @@ import type {
 
 export class WorktreeWorkflowRunHandler extends WorkflowRunHandler {
   private readonly _worktreeEnvironmentProvisioner: WorktreeEnvironmentProvisioner;
-  private readonly _workflowRunLauncher: WorkflowRunLauncher;
   private readonly _beginRun: (plan: WorkflowRunPlan) => WorkflowRunProgress;
 
   constructor(
     database: Kysely<Database>,
     worktreeEnvironmentProvisioner: WorktreeEnvironmentProvisioner,
-    workflowRunLauncher: WorkflowRunLauncher,
+    workflowRunCoordinator: WorkflowRunCoordinator,
     beginRun: (plan: WorkflowRunPlan) => WorkflowRunProgress,
   ) {
-    super(database);
+    super(database, workflowRunCoordinator);
     this._worktreeEnvironmentProvisioner = worktreeEnvironmentProvisioner;
-    this._workflowRunLauncher = workflowRunLauncher;
     this._beginRun = beginRun;
   }
 
@@ -86,8 +83,6 @@ export class WorktreeWorkflowRunHandler extends WorkflowRunHandler {
 
     const workflowRunRecorder = this.buildRecorder(workflowRun.id, progress);
 
-    let executionEnvironment: ExecutionEnvironment;
-
     const interruptWatch = watchInterrupt();
     try {
       this.createRunDir({
@@ -98,7 +93,7 @@ export class WorktreeWorkflowRunHandler extends WorkflowRunHandler {
         config,
       });
 
-      executionEnvironment = await this._worktreeEnvironmentProvisioner.provision({
+      await this._worktreeEnvironmentProvisioner.provision({
         project,
         worktreeConfig: config.worktree,
         workflowRun,
@@ -133,26 +128,11 @@ export class WorktreeWorkflowRunHandler extends WorkflowRunHandler {
       interruptWatch.stop();
     }
 
-    if (args.detach) {
-      const workerPid = this._workflowRunLauncher.spawnWorker(workflowRun.id);
-
-      const detached = await this.buildResult(workflowRun.id, { kind: 'detached', workerPid });
-      return detached;
-    }
-
-    const execution = await this._workflowRunLauncher.attach(
-      {
-        cwd: executionEnvironment.path,
-        artifactsDirPath,
-        workflow,
-        workflowRun,
-        workflowRunNodes,
-        maxConcurrentNodes: config.run.maxConcurrentNodes,
-      },
+    return this.runPreparedWorkflow({
+      workflowRunId: workflowRun.id,
       workflowRunRecorder,
-    );
-
-    const executed = await this.buildResult(workflowRun.id, { kind: 'executed', execution });
-    return executed;
+      progress,
+      detach: args.detach,
+    });
   }
 }

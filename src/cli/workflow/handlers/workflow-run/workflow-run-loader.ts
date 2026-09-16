@@ -17,6 +17,7 @@ import {
   type WorkflowRunNodeLog,
 } from '#workflow-run/repository.js';
 import { WorkflowRunRecorder } from '#workflow-run/recorder.js';
+import { WorkflowRunSequenceReader } from '#workflow-run/sequence.js';
 
 type WorkflowRunSpec = {
   workflow: Workflow;
@@ -34,11 +35,13 @@ export class WorkflowRunLoader {
   private readonly _workflowRunEventRepository: WorkflowRunEventRepository;
   private readonly _workflowRunNodeLogRepository: WorkflowRunNodeLogRepository;
   private readonly _workflowRunHookLogRepository: WorkflowRunHookLogRepository;
+  private readonly _workflowRunSequenceReader: WorkflowRunSequenceReader;
 
   constructor(database: Kysely<Database>) {
     this._workflowRunEventRepository = new WorkflowRunEventRepository(database);
     this._workflowRunNodeLogRepository = new WorkflowRunNodeLogRepository(database);
     this._workflowRunHookLogRepository = new WorkflowRunHookLogRepository(database);
+    this._workflowRunSequenceReader = new WorkflowRunSequenceReader(database);
   }
 
   loadSpec(workflowRun: WorkflowRun): WorkflowRunSpec {
@@ -63,7 +66,8 @@ export class WorkflowRunLoader {
     workflowRunId: string,
     listeners: WorkflowRunListeners,
   ): Promise<WorkflowRunRecorder> {
-    const initialSequence = await this.resolveInitialSequence(workflowRunId);
+    const lastSequence = await this._workflowRunSequenceReader.findLastSequence(workflowRunId);
+    const initialSequence = lastSequence === null ? 0 : lastSequence + 1;
 
     const workflowRunRecorder = new WorkflowRunRecorder({
       initialSequence,
@@ -76,21 +80,5 @@ export class WorkflowRunLoader {
       onHookLog: listeners.onHookLog,
     });
     return workflowRunRecorder;
-  }
-
-  private async resolveInitialSequence(workflowRunId: string): Promise<number> {
-    const maxSequences = await Promise.all([
-      this._workflowRunEventRepository.findMaxSequenceByWorkflowRunId(workflowRunId),
-      this._workflowRunNodeLogRepository.findMaxSequenceByWorkflowRunId(workflowRunId),
-      this._workflowRunHookLogRepository.findMaxSequenceByWorkflowRunId(workflowRunId),
-    ]);
-
-    const writtenSequences = maxSequences.filter((maxSequence) => maxSequence !== null);
-    if (writtenSequences.length === 0) {
-      return 0;
-    }
-
-    const nextSequence = Math.max(...writtenSequences) + 1;
-    return nextSequence;
   }
 }

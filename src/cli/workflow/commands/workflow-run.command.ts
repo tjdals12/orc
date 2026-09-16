@@ -12,11 +12,11 @@ import { InPlaceWorkflowRunHandler } from '#cli/workflow/handlers/workflow-run/i
 import { WorktreeEnvironmentProvisioner } from '#cli/workflow/handlers/workflow-run/worktree-environment-provisioner.js';
 import { InPlaceEnvironmentProvisioner } from '#cli/workflow/handlers/workflow-run/in-place-environment-provisioner.js';
 import { WorkflowRunLauncher } from '#cli/workflow/handlers/workflow-run/workflow-run-launcher.js';
+import { WorkflowRunCoordinator } from '#cli/workflow/handlers/workflow-run/workflow-run-coordinator.js';
 import type { WorkflowRunInput } from '#cli/workflow/handlers/workflow-run/types.js';
 import {
   beginWorkflowRun,
   beginWorkflowRunQuietly,
-  renderWorkflowRunCancelling,
   renderWorkflowRunStoppedSignal,
   renderWorkflowRunResult,
   renderWorktreeBlock,
@@ -41,7 +41,7 @@ export const workflowRunCommand = new Command('run')
   .option('--base <ref>', 'Ref the worktree branch forks from (default: current HEAD)')
   .option('--branch <prefix>', 'Worktree branch prefix (default: orc/<workflow-id>)')
   .option('--detach', 'Run in the background and return immediately')
-  .option('--json', 'Print the run and its nodes as JSON')
+  .option('--json', 'Print the started run and its nodes as JSON, then return')
   .action(async (id: string, options: WorkflowRunCommandOptions) => {
     if (options.worktree === false && options.base !== undefined) {
       throw new WorkflowRunError('--base requires a worktree run. Drop --no-worktree to use it.');
@@ -67,7 +67,8 @@ export const workflowRunCommand = new Command('run')
     const database = openDatabase(buildDatabasePath());
 
     try {
-      const launcher = new WorkflowRunLauncher(database, renderWorkflowRunCancelling);
+      const launcher = new WorkflowRunLauncher(database);
+      const coordinator = new WorkflowRunCoordinator(database, launcher);
       const beginRun = quiet ? beginWorkflowRunQuietly : beginWorkflowRun;
 
       let handler: WorkflowRunHandler;
@@ -78,26 +79,28 @@ export const workflowRunCommand = new Command('run')
           options.branch ?? null,
           quiet ? () => {} : renderWorktreeBlock,
         );
-        handler = new WorktreeWorkflowRunHandler(database, provisioner, launcher, beginRun);
+        handler = new WorktreeWorkflowRunHandler(database, provisioner, coordinator, beginRun);
       } else {
         const provisioner = new InPlaceEnvironmentProvisioner(database);
-        handler = new InPlaceWorkflowRunHandler(database, provisioner, launcher, beginRun);
+        handler = new InPlaceWorkflowRunHandler(database, provisioner, coordinator, beginRun);
       }
 
       const result = await handler.execute(projectPath, {
         workflowId: id,
         input,
-        detach: options.detach ?? false,
+        detach: options.detach === true || options.json === true,
       });
 
-      if (quiet) {
+      if (options.json === true) {
         renderWorkflowRunStoppedSignal(result);
         printJson(handler.toJson(result));
       } else {
         renderWorkflowRunResult(result);
       }
 
-      if (handler.hasFailed(result)) {
+      if (result.outcome.kind === 'interrupted') {
+        process.exitCode = result.outcome.exitCode;
+      } else if (handler.hasFailed(result)) {
         process.exitCode = 1;
       }
     } finally {

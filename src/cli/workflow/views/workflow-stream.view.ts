@@ -129,6 +129,11 @@ export function renderWorkflowStreamFollowResult(
     console.error(`${style.warn(symbols.warn)} This run was deleted.`);
     return;
   }
+  if (outcome === 'interrupted') {
+    return;
+  }
+  outcome satisfies 'ended';
+
   if (entryCount === 0 && !json) {
     console.log('No events or logs recorded.');
   }
