@@ -1,3 +1,9 @@
+# [1.3.0](https://github.com/tjdals12/orc/compare/v1.2.0...v1.3.0) (2026-09-18)
+
+### Features
+
+- **workflow:** keep runs alive after terminal exit ([#9](https://github.com/tjdals12/orc/issues/9)) ([ed0d04a](https://github.com/tjdals12/orc/commit/ed0d04aa296ade20b3b81c6804ed82f3cce672bb))
+
 # [1.3.0-next.1](https://github.com/tjdals12/orc/compare/v1.2.0...v1.3.0-next.1) (2026-09-16)
 
 ### Features
