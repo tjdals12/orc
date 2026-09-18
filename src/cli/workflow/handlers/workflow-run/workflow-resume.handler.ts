@@ -9,21 +9,21 @@ import {
   WorkflowRunNodeRepository,
   WorkflowRunRepository,
   type WorkflowRun,
-  type WorkflowRunEvent,
-  type WorkflowRunHookLog,
   type WorkflowRunNode,
-  type WorkflowRunNodeLog,
 } from '#workflow-run/repository.js';
 import { WorkflowRunError } from '#workflow-run/error.js';
 import { resolveWorkflowRunLiveness } from '#workflow-run/liveness.js';
-import type { WorkflowExecutionResult } from '#workflow-run/executor/types.js';
 import {
   ExecutionEnvironmentRepository,
   type ExecutionEnvironment,
 } from '#execution-environment/repository.js';
 
-import type { WorkflowRunLauncher } from './workflow-run-launcher.js';
+import type {
+  WorkflowRunCoordinationOutcome,
+  WorkflowRunCoordinator,
+} from './workflow-run-coordinator.js';
 import { WorkflowRunLoader } from './workflow-run-loader.js';
+import type { WorkflowRunProgress } from './types.js';
 import type { WorktreeEnvironmentInfo } from './worktree-environment-provisioner.js';
 
 export type WorkflowResumePlan = {
@@ -37,16 +37,10 @@ export type WorkflowResumePlan = {
   nodeLabels: string[];
 };
 
-export type WorkflowResumeProgress = {
-  onEvent: (event: WorkflowRunEvent) => void;
-  onLog: (log: WorkflowRunNodeLog) => void;
-  onHookLog: (hookLog: WorkflowRunHookLog) => void;
-};
-
 type WorkflowResumeOutcome =
-  | { kind: 'noop' }
-  | { kind: 'detached'; workerPid: number }
-  | { kind: 'executed'; execution: WorkflowExecutionResult };
+  { kind: 'noop' } | Exclude<WorkflowRunCoordinationOutcome, { kind: 'cancelled' }>;
+
+type WorkflowResumeResultInput = { kind: 'noop' } | WorkflowRunCoordinationOutcome;
 
 export type WorkflowResumeResult = {
   run: WorkflowRun;
@@ -62,13 +56,13 @@ export class WorkflowResumeHandler {
   private readonly _workflowRunNodeProcessGroupRepository: WorkflowRunNodeProcessGroupRepository;
   private readonly _executionEnvironmentRepository: ExecutionEnvironmentRepository;
   private readonly _loader: WorkflowRunLoader;
-  private readonly _launcher: WorkflowRunLauncher;
-  private readonly _beginResume: (plan: WorkflowResumePlan) => WorkflowResumeProgress;
+  private readonly _workflowRunCoordinator: WorkflowRunCoordinator;
+  private readonly _beginResume: (plan: WorkflowResumePlan) => WorkflowRunProgress;
 
   constructor(
     database: Kysely<Database>,
-    launcher: WorkflowRunLauncher,
-    beginResume: (plan: WorkflowResumePlan) => WorkflowResumeProgress,
+    workflowRunCoordinator: WorkflowRunCoordinator,
+    beginResume: (plan: WorkflowResumePlan) => WorkflowRunProgress,
   ) {
     this._database = database;
     this._projectRepository = new ProjectRepository(database);
@@ -79,7 +73,7 @@ export class WorkflowResumeHandler {
     );
     this._executionEnvironmentRepository = new ExecutionEnvironmentRepository(database);
     this._loader = new WorkflowRunLoader(database);
-    this._launcher = launcher;
+    this._workflowRunCoordinator = workflowRunCoordinator;
     this._beginResume = beginResume;
   }
 
@@ -99,7 +93,7 @@ export class WorkflowResumeHandler {
 
     const project = await this.findProjectOrThrow(workflowRun);
 
-    const { workflow, mergedConfig, artifactsDirPath } = this._loader.loadSpec(workflowRun);
+    const { workflow, artifactsDirPath } = this._loader.loadSpec(workflowRun);
 
     const workflowRunNodes = await this._workflowRunNodeRepository.findManyByWorkflowRunId(
       workflowRun.id,
@@ -142,35 +136,13 @@ export class WorkflowResumeHandler {
     const workflowRunRecorder = await this._loader.buildRecorder(workflowRun.id, progress);
     await workflowRunRecorder.recordEvent({ type: 'run_resumed' });
 
-    if (args.detach) {
-      const workerPid = this._launcher.spawnWorker(workflowRun.id);
-      const detached = await this.buildResult(workflowRun.id, { kind: 'detached', workerPid });
-      return detached;
-    }
-
-    const resetWorkflowRun: WorkflowRun = {
-      ...workflowRun,
-      status: 'pending',
-      finished_at: null,
-    };
-    const resetWorkflowRunNodes = await this._workflowRunNodeRepository.findManyByWorkflowRunId(
-      workflowRun.id,
-    );
-
-    const execution = await this._launcher.attach(
-      {
-        cwd: executionEnvironment.path,
-        artifactsDirPath,
-        workflow,
-        workflowRun: resetWorkflowRun,
-        workflowRunNodes: resetWorkflowRunNodes,
-        maxConcurrentNodes: mergedConfig.run.maxConcurrentNodes,
-      },
+    const coordinationOutcome = await this._workflowRunCoordinator.execute({
+      workflowRunId: workflowRun.id,
       workflowRunRecorder,
-    );
-
-    const executed = await this.buildResult(workflowRun.id, { kind: 'executed', execution });
-    return executed;
+      progress,
+      detach: args.detach,
+    });
+    return this.buildResult(workflowRun.id, coordinationOutcome);
   }
 
   toJson(result: WorkflowResumeResult) {
@@ -182,6 +154,7 @@ export class WorkflowResumeHandler {
     switch (result.outcome.kind) {
       case 'noop':
       case 'detached':
+      case 'interrupted':
         return false;
       case 'executed':
         return (
@@ -303,7 +276,7 @@ export class WorkflowResumeHandler {
 
   private async buildResult(
     workflowRunId: string,
-    outcome: WorkflowResumeOutcome,
+    outcome: WorkflowResumeResultInput,
   ): Promise<WorkflowResumeResult> {
     const run = await this._workflowRunRepository.findById(workflowRunId);
     if (run === null) {
@@ -311,6 +284,17 @@ export class WorkflowResumeHandler {
     }
 
     const nodes = await this._workflowRunNodeRepository.findManyByWorkflowRunId(workflowRunId);
+
+    if (outcome.kind === 'cancelled') {
+      return {
+        run,
+        nodes,
+        outcome: {
+          kind: 'executed',
+          execution: { outcome: 'cancelled' },
+        },
+      };
+    }
 
     const result: WorkflowResumeResult = { run, nodes, outcome };
     return result;

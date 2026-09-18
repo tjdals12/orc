@@ -14,7 +14,6 @@ import type {
 } from '#cli/workflow/handlers/workflow-run/types.js';
 import type {
   WorkflowResumePlan,
-  WorkflowResumeProgress,
   WorkflowResumeResult,
 } from '#cli/workflow/handlers/workflow-run/workflow-resume.handler.js';
 import type { WorktreeEnvironmentInfo } from '#cli/workflow/handlers/workflow-run/worktree-environment-provisioner.js';
@@ -189,7 +188,7 @@ export function beginWorkflowRunQuietly(): WorkflowRunProgress {
   return progress;
 }
 
-export function beginWorkflowResume(plan: WorkflowResumePlan): WorkflowResumeProgress {
+export function beginWorkflowResume(plan: WorkflowResumePlan): WorkflowRunProgress {
   renderResumeHeader(plan);
 
   if (plan.artifactsDirPath !== null) {
@@ -201,7 +200,7 @@ export function beginWorkflowResume(plan: WorkflowResumePlan): WorkflowResumePro
   }
 
   const streamRenderer = buildStreamRenderer(plan.nodeLabels);
-  const progress: WorkflowResumeProgress = {
+  const progress: WorkflowRunProgress = {
     onEvent: streamRenderer.onEvent,
     onLog: streamRenderer.onLog,
     onHookLog: streamRenderer.onHookLog,
@@ -209,8 +208,8 @@ export function beginWorkflowResume(plan: WorkflowResumePlan): WorkflowResumePro
   return progress;
 }
 
-export function beginWorkflowResumeQuietly(): WorkflowResumeProgress {
-  const progress: WorkflowResumeProgress = {
+export function beginWorkflowResumeQuietly(): WorkflowRunProgress {
+  const progress: WorkflowRunProgress = {
     onEvent: () => {},
     onLog: () => {},
     onHookLog: () => {},
@@ -224,6 +223,8 @@ export function renderWorkflowRunResult(result: WorkflowRunResult): void {
   console.error('');
   if (outcome.kind === 'detached') {
     renderDetachedLine(outcome.workerPid);
+  } else if (outcome.kind === 'interrupted') {
+    renderFollowerInterrupted(run.id, outcome.signal);
   } else if (outcome.kind === 'executed' && outcome.execution.outcome === 'succeeded') {
     renderSucceededLine(outcome.execution.nodeCount, outcome.execution.elapsedSeconds);
   } else {
@@ -243,6 +244,10 @@ export function renderWorkflowRunStoppedSignal(result: WorkflowRunResult): void 
   const { outcome } = result;
 
   if (outcome.kind === 'detached') {
+    return;
+  }
+  if (outcome.kind === 'interrupted') {
+    renderFollowerInterrupted(result.run.id, outcome.signal);
     return;
   }
   if (outcome.kind === 'provisioning-failed') {
@@ -268,6 +273,10 @@ export function renderWorkflowResumeStoppedSignal(result: WorkflowResumeResult):
   if (outcome.kind === 'noop' || outcome.kind === 'detached') {
     return;
   }
+  if (outcome.kind === 'interrupted') {
+    renderFollowerInterrupted(result.run.id, outcome.signal);
+    return;
+  }
   if (outcome.kind === 'executed') {
     renderExecutionStoppedLine(outcome.execution);
     return;
@@ -286,6 +295,8 @@ export function renderWorkflowResumeResult(result: WorkflowResumeResult): void {
   console.error('');
   if (outcome.kind === 'detached') {
     renderDetachedLine(outcome.workerPid);
+  } else if (outcome.kind === 'interrupted') {
+    renderFollowerInterrupted(run.id, outcome.signal);
   } else if (outcome.execution.outcome === 'succeeded') {
     renderSucceededLine(outcome.execution.nodeCount, outcome.execution.elapsedSeconds);
   } else {
@@ -313,6 +324,22 @@ function renderDetachedLine(workerPid: number): void {
   console.error(`${style.success(symbols.ok)} Detached  ${style.muted(`·  pid ${workerPid}`)}`);
 }
 
+function renderFollowerInterrupted(workflowRunId: string, signal: string): void {
+  console.error(
+    `${style.warn(symbols.warn)} Following stopped  ${style.muted(`·  ${signal}, workflow continues in background`)}`,
+  );
+  console.error('');
+  console.error(style.strong('Run'));
+  const lines = formatInfoBlock([
+    ['ID', style.ident(workflowRunId)],
+    ['Follow', style.ident(`workflow stream ${workflowRunId} --follow`)],
+    ['Cancel', style.ident(`workflow cancel ${workflowRunId}`)],
+  ]);
+  for (const line of lines) {
+    console.error(line);
+  }
+}
+
 function renderExecutionStoppedLine(execution: WorkflowExecutionResult): void {
   if (execution.outcome === 'succeeded') {
     return;
@@ -327,6 +354,10 @@ function renderExecutionStoppedLine(execution: WorkflowExecutionResult): void {
   }
   if (execution.outcome === 'failed') {
     const { nodeId, reason } = execution;
+    if (nodeId === null) {
+      console.error(`${style.error(symbols.fail)} Failed  ${style.muted(`·  ${reason}`)}`);
+      return;
+    }
     console.error(
       `${style.error(symbols.fail)} Failed at ${nodeId}  ${style.muted(`·  ${reason}`)}`,
     );
@@ -347,17 +378,6 @@ function renderExecutionStoppedLine(execution: WorkflowExecutionResult): void {
     return;
   }
   execution satisfies never;
-}
-
-export function renderWorkflowRunCancelling(): void {
-  console.error('');
-  console.error(
-    `${style.muted(symbols.running)} Cancelling  ${style.muted('·  waiting for nodes to stop')}`,
-  );
-  console.error(
-    `${style.warn(symbols.warn)} Do not press Ctrl-C again — it quits now and leaves the record incomplete.`,
-  );
-  console.error('');
 }
 
 function renderInspectBlock(workflowRunId: string, approvals: PendingApproval[]): void {

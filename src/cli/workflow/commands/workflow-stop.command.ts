@@ -15,7 +15,7 @@ export const workflowStopCommand = new Command('stop')
     const database = openDatabase(buildDatabasePath());
 
     try {
-      const launcher = new WorkflowRunLauncher(database, () => {});
+      const launcher = new WorkflowRunLauncher(database);
       const handler = new WorkflowStopHandler(database, launcher);
       const result = await handler.execute({ workflowRunId });
 

@@ -34,6 +34,7 @@ import {
 import { WorkflowRunRecorder } from '#workflow-run/recorder.js';
 
 import { WorkflowRunInputReader } from './workflow-run-input-reader.js';
+import type { WorkflowRunCoordinator } from './workflow-run-coordinator.js';
 import { WorkflowRunStateWriter } from './workflow-run-state-writer.js';
 import type {
   WorkflowRunInput,
@@ -51,9 +52,10 @@ export abstract class WorkflowRunHandler {
   private readonly _workflowRunNodeLogRepository: WorkflowRunNodeLogRepository;
   private readonly _workflowRunHookLogRepository: WorkflowRunHookLogRepository;
   private readonly _workflowRunInputReader: WorkflowRunInputReader;
+  private readonly _workflowRunCoordinator: WorkflowRunCoordinator;
   protected readonly workflowRunStateWriter: WorkflowRunStateWriter;
 
-  constructor(database: Kysely<Database>) {
+  constructor(database: Kysely<Database>, workflowRunCoordinator: WorkflowRunCoordinator) {
     this._database = database;
     this._projectRepository = new ProjectRepository(database);
     this._workflowRunRepository = new WorkflowRunRepository(database);
@@ -62,6 +64,7 @@ export abstract class WorkflowRunHandler {
     this._workflowRunNodeLogRepository = new WorkflowRunNodeLogRepository(database);
     this._workflowRunHookLogRepository = new WorkflowRunHookLogRepository(database);
     this._workflowRunInputReader = new WorkflowRunInputReader();
+    this._workflowRunCoordinator = workflowRunCoordinator;
     this.workflowRunStateWriter = new WorkflowRunStateWriter(database);
   }
 
@@ -82,6 +85,7 @@ export abstract class WorkflowRunHandler {
   hasFailed(result: WorkflowRunResult): boolean {
     switch (result.outcome.kind) {
       case 'detached':
+      case 'interrupted':
         return false;
       case 'provisioning-failed':
       case 'cancelled':
@@ -212,6 +216,16 @@ export abstract class WorkflowRunHandler {
         `Failed to create the run directory at ${workflowRunDirPath}. ${message}`,
       );
     }
+  }
+
+  protected async runPreparedWorkflow(args: {
+    workflowRunId: string;
+    workflowRunRecorder: WorkflowRunRecorder;
+    progress: WorkflowRunProgress;
+    detach: boolean;
+  }): Promise<WorkflowRunResult> {
+    const outcome = await this._workflowRunCoordinator.execute(args);
+    return this.buildResult(args.workflowRunId, outcome);
   }
 
   protected async buildResult(
