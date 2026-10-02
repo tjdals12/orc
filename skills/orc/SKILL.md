@@ -6,7 +6,7 @@ description: "Runs and writes orc workflows. Use when the user wants work done b
   fixed. Not for doing the work directly: this skill delegates to the orc CLI."
 compatibility: Requires the orc CLI.
 metadata:
-  version: '4'
+  version: '5'
 ---
 
 Each workflow is a file at `.orc/workflows/<id>.yml`. Every run executes in its
@@ -66,9 +66,11 @@ own git worktree. Run `orc` from the project root.
    `input.description` says what to write; `input.required` says whether the
    run starts without it.
 
-   Write it to a file such as `/tmp/orc-input.md`: the user's request, or your
-   summary of the conversation that decided it. Do not ask the user to prepare
-   it.
+   Write a self-contained task brief to a file such as `/tmp/orc-input.md`.
+   Describe the outcome to achieve, relevant context, constraints, and decisions
+   from the conversation. The brief is for work performed inside the run; this
+   skill handles workflow selection, launch, and observation. Do not ask the user
+   to prepare it.
 
 3. **Start the run**
 
