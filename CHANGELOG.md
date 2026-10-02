@@ -1,3 +1,9 @@
+## [1.3.1-next.1](https://github.com/tjdals12/orc/compare/v1.3.0...v1.3.1-next.1) (2026-10-02)
+
+### Bug Fixes
+
+- **skill:** clarify workflow input as task brief ([ebfe649](https://github.com/tjdals12/orc/commit/ebfe649630a2c6deb752db04f73fd21c6ba1805f))
+
 # [1.3.0](https://github.com/tjdals12/orc/compare/v1.2.0...v1.3.0) (2026-09-18)
 
 ### Features
