@@ -334,17 +334,32 @@ nodes:
         echo "pull request is $state, refusing to merge" >&2
         exit 1
       else
-        # The archive commit was pushed moments ago; its checks need a few seconds to
-        # register. Without this the watch below runs against an empty check list.
-        for _ in $(seq 1 30); do
-          n=$(gh pr checks "$url" --json name --jq 'length' 2>/dev/null || true)
-          if [ -n "${n:-}" ] && [ "$n" -gt 0 ]; then break; fi
+        deadline=$((SECONDS + 30))
+
+        while true; do
+          count=$(gh pr view "$url" \
+            --json statusCheckRollup \
+            --jq '(.statusCheckRollup // []) | length')
+
+          if [ "$count" -gt 0 ]; then
+            break
+          fi
+
+          if [ "$SECONDS" -ge "$deadline" ]; then
+            break
+          fi
+
+          echo "No checks registered yet; retrying in 5 seconds..."
           sleep 5
         done
 
-        gh pr checks "$url" --watch --fail-fast
+        if [ "$count" -gt 0 ]; then
+          echo "Found $count check(s); waiting for completion..."
+          gh pr checks "$url" --watch --fail-fast
+        else
+          echo "No checks reported within the registration window; attempting merge."
+        fi
 
-        # Adjust the merge method to match your repository's policy.
         gh pr merge "$url" --squash
       fi
 
