@@ -25,6 +25,7 @@ export class WorkflowRunNodeExecutor {
   private readonly _cwd: string;
   private readonly _artifactsDirPath: string;
   private readonly _input: string;
+  private readonly _baseBranch: string;
   private readonly _signal: AbortSignal;
 
   constructor(args: {
@@ -33,6 +34,7 @@ export class WorkflowRunNodeExecutor {
     cwd: string;
     artifactsDirPath: string;
     input: string;
+    baseBranch: string;
     signal: AbortSignal;
   }) {
     this._workflowRunStateWriter = args.workflowRunStateWriter;
@@ -40,6 +42,7 @@ export class WorkflowRunNodeExecutor {
     this._cwd = args.cwd;
     this._artifactsDirPath = args.artifactsDirPath;
     this._input = args.input;
+    this._baseBranch = args.baseBranch;
     this._signal = args.signal;
   }
 
@@ -166,6 +169,7 @@ export class WorkflowRunNodeExecutor {
       artifactTextByName,
       artifactsDirPath: this._artifactsDirPath,
       input: this._input,
+      baseBranch: this._baseBranch,
     });
 
     const approvalNodeRunResult: ApprovalNodeRunResult = {
@@ -190,6 +194,7 @@ export class WorkflowRunNodeExecutor {
         env: {
           ARTIFACTS_DIR: this._artifactsDirPath,
           INPUT: this._input,
+          BASE_BRANCH: this._baseBranch,
         },
         detached: true,
         signal: this._signal,
@@ -231,6 +236,7 @@ export class WorkflowRunNodeExecutor {
         artifactTextByName,
         artifactsDirPath: this._artifactsDirPath,
         input: this._input,
+        baseBranch: this._baseBranch,
         reason: workflowRunNode.reason ?? undefined,
       });
 
@@ -293,6 +299,7 @@ export class WorkflowRunNodeExecutor {
       env: {
         ARTIFACTS_DIR: this._artifactsDirPath,
         INPUT: this._input,
+        BASE_BRANCH: this._baseBranch,
       },
       detached: true,
       signal: this._signal,
@@ -334,6 +341,7 @@ export class WorkflowRunNodeExecutor {
       artifactTextByName,
       artifactsDirPath: this._artifactsDirPath,
       input: this._input,
+      baseBranch: this._baseBranch,
     });
 
     const nodeRunResult = await runAgentNode(node, {
@@ -348,7 +356,11 @@ export class WorkflowRunNodeExecutor {
       },
       bashCheckOptions: {
         cwd: this._cwd,
-        env: { ARTIFACTS_DIR: this._artifactsDirPath, INPUT: this._input },
+        env: {
+          ARTIFACTS_DIR: this._artifactsDirPath,
+          INPUT: this._input,
+          BASE_BRANCH: this._baseBranch,
+        },
         detached: true,
         signal: this._signal,
         processGroupObserver: {

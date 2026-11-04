@@ -104,6 +104,7 @@ export class WorkflowRunExecutor {
       cwd,
       artifactsDirPath,
       input: workflowRun.input ?? '',
+      baseBranch: workflowRun.base_branch ?? '',
       signal: runControlWatch.signal,
     });
 

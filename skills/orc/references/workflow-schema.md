@@ -78,8 +78,8 @@ A `loop:` declares **exactly one** of `completion_signal` and
 `completion_bash`. Declaring both, or neither, makes the workflow invalid.
 
 `completion_bash` is a bash script, like a `bash` node's `script`. It runs after
-each iteration — never before the first — with `$INPUT` and `$ARTIFACTS_DIR` in
-its environment. The **last command's exit code** is the answer:
+each iteration — never before the first — with `$INPUT`, `$BASE_BRANCH` and
+`$ARTIFACTS_DIR` in its environment. The **last command's exit code** is the answer:
 
 | Exit | Meaning                                                 |
 | ---- | ------------------------------------------------------- |
@@ -185,13 +185,14 @@ creates it. A step that installs, builds or tests needs one of the two.
 
 ## Tokens
 
-Four tokens. Write them exactly as shown — a token is recognised only at a
+Five tokens. Write them exactly as shown — a token is recognised only at a
 word boundary. An `approval` node's `message` and an `on_reject` prompt render
 them exactly as an `agent` prompt does.
 
 | Token               | In a `bash` script                                                      | In an `agent` prompt                                      |
 | ------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------- |
 | `$INPUT`            | environment variable holding the run's input (empty when there is none) | replaced with the input text                              |
+| `$BASE_BRANCH`      | environment variable holding the run's recorded base branch             | replaced with the recorded base branch name               |
 | `$ARTIFACTS_DIR`    | environment variable holding the run's artifact directory               | replaced with the directory path                          |
 | `$ARTIFACT(<name>)` | **nothing** — read the file with `cat "$ARTIFACTS_DIR/<name>"`          | replaced with the file's contents                         |
 | `$REASON`           | **nothing** — a bash `on_reject` receives no reason                     | replaced with the reject reason, `on_reject` prompts only |
@@ -206,6 +207,11 @@ safely contain a token's spelling.
 
 An optional `input:` may be absent at run time, and `$INPUT` then renders as
 nothing. Put it where the surrounding line still reads when it is empty.
+
+`$BASE_BRANCH` is the run's starting branch: the branch at `HEAD` by default,
+or the branch selected by `--base`. Resume keeps the original value.
+If the starting ref does not identify a branch, a workflow referencing
+`$BASE_BRANCH` fails before any node runs.
 
 ## Rules
 

@@ -160,6 +160,7 @@ export function renderWorkflowStatusResult(workflowStatusResult: WorkflowStatusR
     workflow_id: workflowId,
     status,
     input,
+    base_branch: baseBranch,
     started_at: startedAt,
     finished_at: finishedAt,
   } = run;
@@ -181,6 +182,9 @@ export function renderWorkflowStatusResult(workflowStatusResult: WorkflowStatusR
     ['Duration', duration],
     ['Environment', formatEnvironmentKind(environment)],
   ];
+  if (baseBranch !== null) {
+    rows.push(['Base branch', style.ident(baseBranch)]);
+  }
   if (environment !== null) {
     if (environment.branch !== null) {
       rows.push(['Branch', style.ident(environment.branch)]);
