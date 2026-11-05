@@ -32,6 +32,7 @@ orc는 이러한 반복적인 흐름을 YAML로 정의해 실행하는, AI 에�
   - [에이전트와 함께 작성하기](#에이전트와-함께-작성하기)
   - [직접 작성하기](#직접-작성하기)
   - [확인하기](#확인하기)
+- [예제](#예제)
 - [워크플로우 실행](#워크플로우-실행)
   - [에이전트와 함께 실행하기](#에이전트와-함께-실행하기)
   - [직접 실행하기](#직접-실행하기)
@@ -234,6 +235,11 @@ $ orc workflow validate implement
 
 ✔ implement is valid  ·  3 nodes
 ```
+
+## 예제
+
+- [OpenSpec](example/openspec-workflow.yml) — OpenSpec과 Codex를 활용하는 기능 개발 워크플로우 (`openspec`, `gh`, `jq`가 필요합니다.)
+- [버그 수정](example/bugfix-workflow.yml) — Codex를 활용하는 버그 수정 워크플로우 (`gh`가 필요합니다.)
 
 ## 워크플로우 실행
 
