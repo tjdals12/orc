@@ -1,3 +1,9 @@
+# [1.4.0](https://github.com/tjdals12/orc/compare/v1.3.1...v1.4.0) (2026-11-05)
+
+### Features
+
+- **workflow:** add BASE_BRANCH token ([#13](https://github.com/tjdals12/orc/issues/13)) ([e28cce0](https://github.com/tjdals12/orc/commit/e28cce07c4e0f272362cba5a3367c136e47d4298))
+
 # [1.4.0-next.1](https://github.com/tjdals12/orc/compare/v1.3.1...v1.4.0-next.1) (2026-11-05)
 
 ### Features
