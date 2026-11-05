@@ -1,0 +1,367 @@
+version: 1
+id: openspec-workflow
+description: Develop a feature with OpenSpec using Codex, with agent artifact review before implementation and approval before archiving and merging
+input:
+  required: true
+  description: The feature to build - what it should do, plus any constraints or decisions already made. A summary of the conversation that led here works well.
+nodes:
+  - id: ff
+    type: agent
+    provider: codex
+    model: gpt-6.1-sol
+    options:
+      model_reasoning_effort: high
+    prompt: |
+      **Feature request**: $INPUT
+
+      Use the `openspec-ff-change` skill for this request.
+
+      Pass the feature request through `--description` when creating the change.
+      Continue an existing change for the same request; if its name conflicts with
+      an unrelated change, choose a more specific name.
+
+      Resolve questions from the request and codebase instead of asking the user.
+      Record your decisions in the affected artifacts.
+
+      Keep `tasks.md` checkboxes limited to implementation work. Put archiving,
+      spec sync, pull request, and release notes as plain bullets under
+      `## Archive-time notes`.
+
+      Commit the changes.
+
+      Guardrails:
+      - Follow the repository's instructions and conventions.
+
+      Write:
+      - `$ARTIFACTS_DIR/change-name.txt`: the change name on one line.
+      - `$ARTIFACTS_DIR/ff-summary.md`: the change name, schema, a one-sentence
+        summary of each artifact created, and decisions made without user input.
+    produces:
+      - change-name.txt
+      - ff-summary.md
+
+  - id: review-artifacts
+    type: agent
+    provider: codex
+    model: gpt-6.1-sol
+    options:
+      model_reasoning_effort: high
+    depends_on: [ff]
+    consumes:
+      - change-name.txt
+      - ff-summary.md
+    loop:
+      completion_signal: OPENSPEC_ARTIFACT_REVIEW_COMPLETE
+      max_iterations: 3
+    prompt: |
+      **Feature request**: $INPUT
+      **Change name**: $ARTIFACT(change-name.txt)
+
+      Read `$ARTIFACTS_DIR/ff-summary.md` to understand the artifacts created
+      and the decisions made while creating them. Check those decisions
+      against the feature request.
+
+      If `$ARTIFACTS_DIR/artifact-review.md` exists, read it for previous findings
+      and revisions, then recheck them against the current artifacts.
+
+      Use the `openspec-update-change` skill to review and revise this change
+      against the feature request.
+
+      Commit the changes.
+
+      If you made no revisions and found no missing requirements, contradictions,
+      or material unresolved decisions, end your message with this line on its own:
+
+      OPENSPEC_ARTIFACT_REVIEW_COMPLETE
+
+      Guardrails:
+      - Ground project-specific decisions in the repository's instructions,
+        configuration, source, and tests.
+      - Apply revisions within the original request without asking for confirmation.
+      - Resolve questions from the available evidence and record your reasoning.
+        Leave material decisions unresolved when the evidence is insufficient.
+
+      Write:
+      - Append an entry to `$ARTIFACTS_DIR/artifact-review.md` covering requirement
+        coverage, findings, revisions and their reasons, validation results,
+        and unresolved decisions.
+    produces:
+      - artifact-review.md
+
+  - id: apply
+    type: agent
+    provider: codex
+    model: gpt-6.1-sol
+    options:
+      model_reasoning_effort: low
+    depends_on: [review-artifacts]
+    consumes:
+      - change-name.txt
+    loop:
+      completion_bash: |
+        name=$(cat "$ARTIFACTS_DIR/change-name.txt") || exit 2
+        changes=$(openspec list --json) || exit 2
+        status=$(printf '%s\n' "$changes" | jq -er --arg n "$name" '.changes[] | select(.name == $n) | .status') || exit 2
+        test "$status" = complete
+      max_iterations: 50
+    prompt: |
+      **Change name**: $ARTIFACT(change-name.txt)
+
+      If `$ARTIFACTS_DIR/apply-progress.md` exists, read it to understand
+      the previous work, decisions, and blockers.
+
+      Implement **one task group** of this change using the
+      `openspec-apply-change` skill.
+
+      `tasks.md` groups its checkboxes under `## <number>. <name>` headings.
+      Take the first group that still has an unchecked task and complete
+      every task in it.
+
+      Resolve questions from the change's artifacts and codebase instead
+      of asking the user.
+
+      Run the tests and other checks relevant to your changes using the
+      project's existing commands and tooling.
+
+      Commit the group's changes and completed task checkboxes together
+      in one commit.
+
+      Guardrails:
+      - Follow the repository's instructions and conventions.
+      - Do not start another task group.
+
+      Write:
+      - Rewrite `$ARTIFACTS_DIR/apply-progress.md` using this template:
+
+      ```
+      ## Done
+      - <the task group you implemented, and the commit subject>
+
+      ## Decisions and blockers
+      - ...
+      ```
+    produces:
+      - apply-progress.md
+
+  - id: verify
+    type: agent
+    provider: codex
+    model: gpt-6.1-sol
+    options:
+      model_reasoning_effort: medium
+    depends_on: [apply]
+    consumes:
+      - change-name.txt
+    loop:
+      completion_signal: OPENSPEC_VERIFY_COMPLETE
+      max_iterations: 3
+    prompt: |
+      **Change name**: $ARTIFACT(change-name.txt)
+
+      If `$ARTIFACTS_DIR/verify-report.md` exists, read it for previous findings
+      and attempted fixes.
+
+      Use the `openspec-verify-change` skill to verify this change.
+
+      After verification, address the findings within this change following
+      the report's recommendations.
+
+      Resolve questions from the change's artifacts and codebase instead
+      of asking the user.
+
+      If you made changes, run the relevant tests and checks using the project's
+      existing commands and tooling.
+
+      Commit the changes.
+
+      End your message with this line on its own when no CRITICAL or WARNING
+      issues remain open:
+
+      OPENSPEC_VERIFY_COMPLETE
+
+      Guardrails:
+      - Leave code unchanged for issues whose cause lies outside this change.
+
+      Write:
+      - Write the skill's report to `$ARTIFACTS_DIR/verify-report.md`.
+        Add your fixes, attempted fixes, and the causes and reasons
+        for findings left unresolved or suggestions left unapplied.
+    produces:
+      - verify-report.md
+
+  - id: pr
+    type: agent
+    provider: codex
+    model: gpt-6.1-sol
+    options:
+      model_reasoning_effort: low
+    depends_on: [verify]
+    consumes:
+      - change-name.txt
+      - verify-report.md
+    prompt: |
+      **Change name**: $ARTIFACT(change-name.txt)
+
+      Read the change's `proposal.md` and `design.md` to understand its purpose
+      and design.
+      Read `$ARTIFACTS_DIR/verify-report.md` for verification results
+      and unresolved findings.
+
+      Review the whole branch's diff against the repository's default branch
+      to understand the implementation.
+
+      Resolve questions from these materials instead of asking the user.
+
+      Push the branch and open a pull request targeting the repository's
+      default branch, with a title summarizing the change and this body template:
+
+      ```
+      ## Summary
+      - <purpose and key changes>
+
+      ## Verification
+      - <checks performed and their results>
+
+      ## Risk/Notes
+      - <unresolved findings and attempted fixes, or None>
+      ```
+
+      Write:
+      - `$ARTIFACTS_DIR/pr-url.txt`: the pull request URL on one line.
+    produces:
+      - pr-url.txt
+
+  - id: review-pr
+    type: approval
+    depends_on: [pr]
+    consumes:
+      - change-name.txt
+      - pr-url.txt
+      - verify-report.md
+    message: |
+      **Pull request**: $ARTIFACT(pr-url.txt)
+
+      Review the pull request. Approval archives the change and then merges
+      the pull request.
+
+      Reject with a reason to address unresolved review feedback, validate
+      and push fixes, and request review again. A pull-request comment
+      summarizes the fixes and remaining issues.
+    on_reject:
+      type: agent
+      provider: codex
+      model: gpt-6.1-sol
+      options:
+        model_reasoning_effort: high
+      prompt: |
+        **Change name**: $ARTIFACT(change-name.txt)
+        **Pull request**: $ARTIFACT(pr-url.txt)
+        **Reviewer feedback**: $REASON
+
+        Read `$ARTIFACTS_DIR/verify-report.md` for previous verification results.
+        Use the GitHub CLI to collect unresolved review threads, review summaries,
+        and pull-request conversation comments.
+
+        Address the rejection reason and unresolved feedback with the narrowest
+        reasonable fixes.
+
+        Resolve questions from the OpenSpec artifacts, code, and repository
+        conventions instead of asking the user.
+
+        Update the OpenSpec artifacts when feedback changes agreed behavior.
+
+        Run the relevant tests and checks using the project's existing commands
+        and tooling.
+
+        Commit the changes and push the branch.
+
+        Guardrails:
+        - Do not reapply feedback already resolved or addressed by the current code.
+        - Leave code unchanged when a required product or policy decision
+          cannot be inferred from the available evidence.
+        - Do not archive or merge.
+
+        Write:
+        - Post a concise pull-request comment covering each feedback item and its
+          GitHub URL when available, how it was addressed, commits, validation results,
+          and unapplied or unresolved items with their reasons.
+          For unresolved product or policy decisions, include the decision needed
+          and options considered. Post the comment even if no code changed.
+
+  - id: archive
+    type: agent
+    provider: codex
+    model: gpt-6.1-sol
+    options:
+      model_reasoning_effort: medium
+    depends_on: [review-pr]
+    consumes:
+      - change-name.txt
+    prompt: |
+      **Change name**: $ARTIFACT(change-name.txt)
+
+      Use the `openspec-archive-change` skill to archive this change.
+
+      Resolve questions from the change's artifacts and codebase instead
+      of asking the user.
+
+      Sync delta specs when needed and proceed past warnings about incomplete
+      artifacts or tasks.
+
+      Commit the changes and push the branch.
+
+      Write:
+      - Write the skill's summary to `$ARTIFACTS_DIR/archive-summary.md`,
+        including the capabilities affected by spec sync.
+    produces:
+      - archive-summary.md
+
+  - id: merge
+    type: bash
+    depends_on: [archive]
+    consumes:
+      - pr-url.txt
+    script: |
+      set -euo pipefail
+
+      url=$(cat "$ARTIFACTS_DIR/pr-url.txt")
+
+      state=$(gh pr view "$url" --json state --jq .state)
+
+      if [ "$state" = "MERGED" ]; then
+        echo "already merged - nothing to do"
+      elif [ "$state" != "OPEN" ]; then
+        echo "pull request is $state, refusing to merge" >&2
+        exit 1
+      else
+        deadline=$((SECONDS + 30))
+
+        while true; do
+          count=$(gh pr view "$url" \
+            --json statusCheckRollup \
+            --jq '(.statusCheckRollup // []) | length')
+
+          if [ "$count" -gt 0 ]; then
+            break
+          fi
+
+          if [ "$SECONDS" -ge "$deadline" ]; then
+            break
+          fi
+
+          echo "No checks registered yet; retrying in 5 seconds..."
+          sleep 5
+        done
+
+        if [ "$count" -gt 0 ]; then
+          echo "Found $count check(s); waiting for completion..."
+          gh pr checks "$url" --watch --fail-fast
+        else
+          echo "No checks reported within the registration window; attempting merge."
+        fi
+
+        gh pr merge "$url" --squash
+      fi
+
+      gh pr view "$url" --json state,mergeCommit \
+        --jq '"merged as \(.mergeCommit.oid) (\(.state))"'
