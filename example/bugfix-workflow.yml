@@ -1,0 +1,144 @@
+version: 1
+id: bugfix-workflow
+description: Fix a reported bug and verify it with related tests
+input:
+  required: true
+  description: The bug symptoms and expected behavior, with reproduction steps if known
+nodes:
+  - id: reproduce
+    type: agent
+    provider: codex
+    model: gpt-6.1-sol
+    options:
+      model_reasoning_effort: high
+    prompt: |
+      **Bug report**: $INPUT
+
+      Check the bug report.
+      If the input does not describe an identifiable malfunction, record
+      `invalid-input` and explain what bug information is missing. Do not invent
+      a bug to investigate. A brief description or missing error logs alone
+      does not make the input invalid.
+
+      Reproduce the reported bug.
+      Review the repository's testing instructions and relevant source and tests,
+      then attempt reproduction using existing commands and tests. Add a reproduction
+      test or script only if the existing ones do not cover the required conditions.
+
+      If the input is invalid:
+      - Write `invalid-input` to `$ARTIFACTS_DIR/reproduction-status.txt`.
+      - Explain what bug information is missing in
+        `$ARTIFACTS_DIR/reproduction-report.md`.
+
+      If you reproduced the bug:
+      - Write `reproduced` to `$ARTIFACTS_DIR/reproduction-status.txt`.
+      - Document the reproduction steps and commands, expected and observed behavior,
+        and evidence of the reported symptom in
+        `$ARTIFACTS_DIR/reproduction-report.md`.
+
+      If you could not reproduce the bug:
+      - Write `not-reproduced` to `$ARTIFACTS_DIR/reproduction-status.txt`.
+      - Document what you tried, what you observed, and any missing information
+        or prerequisites in `$ARTIFACTS_DIR/reproduction-report.md`.
+        Do not conclude that the bug does not exist.
+
+      Do not ask the user for clarification; record the missing information
+      in the report.
+    produces:
+      - reproduction-status.txt
+      - reproduction-report.md
+
+  - id: check-reproduction
+    type: bash
+    depends_on: [reproduce]
+    consumes:
+      - reproduction-status.txt
+      - reproduction-report.md
+    script: |
+      status=$(cat "$ARTIFACTS_DIR/reproduction-status.txt") || exit 1
+
+      case "$status" in
+        reproduced)
+          exit 0
+          ;;
+        invalid-input|not-reproduced)
+          cat "$ARTIFACTS_DIR/reproduction-report.md" >&2
+          exit 1
+          ;;
+        *)
+          printf 'Unexpected reproduction status: %s\n' "$status" >&2
+          exit 1
+          ;;
+      esac
+
+  - id: diagnose
+    type: agent
+    provider: codex
+    model: gpt-6.1-sol
+    options:
+      model_reasoning_effort: high
+    depends_on: [check-reproduction]
+    consumes:
+      - reproduction-report.md
+    prompt: |
+      **Bug report**: $INPUT
+
+      Read `$ARTIFACTS_DIR/reproduction-report.md` and trace the relevant code
+      to identify the root cause of the reproduced symptom.
+
+      Write your findings to `$ARTIFACTS_DIR/diagnosis-report.md`, explaining
+      how the cause produces the symptom, citing the relevant code and
+      reproduction evidence, and outlining the proposed fix.
+    produces:
+      - diagnosis-report.md
+
+  - id: fix
+    type: agent
+    provider: codex
+    model: gpt-6.1-sol
+    options:
+      model_reasoning_effort: high
+    depends_on: [diagnose]
+    consumes:
+      - reproduction-report.md
+      - diagnosis-report.md
+    prompt: |
+      **Bug report**: $INPUT
+
+      Read `$ARTIFACTS_DIR/reproduction-report.md` and
+      `$ARTIFACTS_DIR/diagnosis-report.md`, then fix the reported bug following
+      the repository's instructions and conventions.
+
+      Repeat the reproduction steps to confirm that the reported symptom is resolved.
+      Add a regression test if existing tests do not cover the bug, and run the
+      tests related to the fix.
+
+      Write a summary of the changes, regression tests, and test commands
+      and results to `$ARTIFACTS_DIR/fix-report.md`.
+    produces:
+      - fix-report.md
+
+  - id: pr
+    type: agent
+    provider: codex
+    model: gpt-6.1-sol
+    options:
+      model_reasoning_effort: low
+    depends_on: [fix]
+    consumes:
+      - diagnosis-report.md
+      - fix-report.md
+    prompt: |
+      **Bug report**: $INPUT
+
+      Read `$ARTIFACTS_DIR/diagnosis-report.md` and
+      `$ARTIFACTS_DIR/fix-report.md`.
+
+      Commit and push the changes, then open a pull request targeting
+      $BASE_BRANCH. Use the reports and the branch's diff
+      against $BASE_BRANCH to describe the reported symptom, root cause,
+      fix, and test results.
+
+      Write the pull request URL to `$ARTIFACTS_DIR/pr-url.txt`.
+    produces:
+      - pr-url.txt

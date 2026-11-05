@@ -76,6 +76,40 @@ export async function hasBranch(args: { repoPath: string; branch: string }): Pro
   }
 }
 
+export async function resolveBranchName(args: {
+  repoPath: string;
+  base: string;
+}): Promise<string | null> {
+  const { repoPath, base } = args;
+
+  const stdout = await runGit(
+    ['rev-parse', '--verify', '--symbolic-full-name', '--end-of-options', base],
+    { cwd: repoPath },
+  );
+  const fullRef = stdout.trim();
+
+  if (fullRef.startsWith('refs/heads/')) {
+    const branchName = fullRef.slice('refs/heads/'.length);
+    return branchName;
+  }
+  if (fullRef.startsWith('refs/remotes/')) {
+    const stdout = await runGit(['remote'], { cwd: repoPath });
+    const remoteNames = stdout
+      .trim()
+      .split('\n')
+      .filter((remoteName) => remoteName.length > 0);
+    for (const remoteName of remoteNames) {
+      const prefix = `refs/remotes/${remoteName}/`;
+      if (fullRef.startsWith(prefix)) {
+        const branchName = fullRef.slice(prefix.length);
+        return branchName;
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function addWorktree(args: {
   repoPath: string;
   worktreePath: string;

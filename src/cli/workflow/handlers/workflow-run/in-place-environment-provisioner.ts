@@ -1,7 +1,15 @@
 import type { Kysely } from 'kysely';
 
+import {
+  buildGitFailureDetail,
+  hasHeadCommit,
+  isGitWorkTree,
+  resolveBranchName,
+} from '#shared/git.js';
+
 import type { Database } from '#database/schema.js';
 import type { Project } from '#project/repository.js';
+import { ExecutionEnvironmentError } from '#execution-environment/error.js';
 import {
   ExecutionEnvironmentRepository,
   type ExecutionEnvironment,
@@ -25,6 +33,21 @@ export class InPlaceEnvironmentProvisioner {
     const { path: projectPath } = project;
     const { id: workflowRunId } = workflowRun;
 
+    let baseBranch: string | null = null;
+    try {
+      const gitWorkTree = await isGitWorkTree(projectPath);
+      if (gitWorkTree) {
+        const headCommit = await hasHeadCommit(projectPath);
+        if (headCommit) {
+          baseBranch = await resolveBranchName({ repoPath: projectPath, base: 'HEAD' });
+        }
+      }
+    } catch (e) {
+      throw new ExecutionEnvironmentError(
+        `Failed to resolve the base branch in ${projectPath}. ${buildGitFailureDetail(e)}`,
+      );
+    }
+
     let executionEnvironment = await this._executionEnvironmentRepository.findByPath(projectPath);
     if (executionEnvironment === null) {
       executionEnvironment = await this._executionEnvironmentRepository.create({
@@ -35,7 +58,7 @@ export class InPlaceEnvironmentProvisioner {
 
     await this._workflowRunRepository.updateOrThrow(
       { id: workflowRunId },
-      { execution_environment_id: executionEnvironment.id },
+      { execution_environment_id: executionEnvironment.id, base_branch: baseBranch },
     );
 
     return executionEnvironment;

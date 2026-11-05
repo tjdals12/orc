@@ -32,6 +32,7 @@ orc is a workflow engine for AI coding agents: you write that loop down as a YAM
   - [With an agent](#with-an-agent)
   - [By hand](#by-hand)
   - [Listing and validating](#listing-and-validating)
+- [Examples](#examples)
 - [Running a workflow](#running-a-workflow)
   - [Ask an agent](#ask-an-agent)
   - [From the CLI](#from-the-cli)
@@ -206,6 +207,13 @@ nodes:
       pnpm lint
 ```
 
+Use `$BASE_BRANCH` in prompts and scripts to refer to the branch the run started from, for example when opening a pull request:
+
+```yaml
+prompt: |
+  Open a pull request targeting $BASE_BRANCH.
+```
+
 The full schema is documented in [the workflow schema](skills/orc/references/workflow-schema.md).
 
 ### Listing and validating
@@ -227,6 +235,11 @@ $ orc workflow validate implement
 
 ✔ implement is valid  ·  3 nodes
 ```
+
+## Examples
+
+- [OpenSpec](example/openspec-workflow.yml) — A workflow for feature development using OpenSpec and Codex. (requires `openspec`, `gh`, `jq`)
+- [Bug fix](example/bugfix-workflow.yml) — A workflow for fixing bugs using Codex. (requires `gh`)
 
 ## Running a workflow
 

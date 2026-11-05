@@ -32,6 +32,7 @@ orc는 이러한 반복적인 흐름을 YAML로 정의해 실행하는, AI 에�
   - [에이전트와 함께 작성하기](#에이전트와-함께-작성하기)
   - [직접 작성하기](#직접-작성하기)
   - [확인하기](#확인하기)
+- [예제](#예제)
 - [워크플로우 실행](#워크플로우-실행)
   - [에이전트와 함께 실행하기](#에이전트와-함께-실행하기)
   - [직접 실행하기](#직접-실행하기)
@@ -206,6 +207,13 @@ nodes:
       pnpm lint
 ```
 
+PR의 대상 브랜치처럼 워크플로우를 시작한 베이스 브랜치가 필요하면, 프롬프트나 스크립트에서 `$BASE_BRANCH`를 사용합니다.
+
+```yaml
+prompt: |
+  $BASE_BRANCH 브랜치를 대상으로 PR을 열어 주세요.
+```
+
 전체 스키마는 [워크플로우 스키마](skills/orc/references/workflow-schema.md)에 정리되어 있습니다.
 
 ### 확인하기
@@ -227,6 +235,11 @@ $ orc workflow validate implement
 
 ✔ implement is valid  ·  3 nodes
 ```
+
+## 예제
+
+- [OpenSpec](example/openspec-workflow.yml) — OpenSpec과 Codex를 활용하는 기능 개발 워크플로우 (`openspec`, `gh`, `jq`가 필요합니다.)
+- [버그 수정](example/bugfix-workflow.yml) — Codex를 활용하는 버그 수정 워크플로우 (`gh`가 필요합니다.)
 
 ## 워크플로우 실행
 

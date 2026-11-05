@@ -116,6 +116,7 @@ export class WorkflowRunRepository {
       project_id: projectId,
       workflow_id: workflowId,
       input,
+      base_branch: null,
       execution_environment_id: null,
       status: 'pending',
       pid: null,

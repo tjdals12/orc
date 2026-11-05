@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { createRequire } from 'node:module';
 
 import { ConfigError } from '#installation/config/error.js';
-import { SetupStampError } from '#installation/setup-stamp/error.js';
+import { OutdatedSetupStampError, SetupStampError } from '#installation/setup-stamp/error.js';
 import { ProjectError } from '#project/error.js';
 import { WorkflowError } from '#workflow/error.js';
 
@@ -57,6 +57,14 @@ try {
     e instanceof ExecutionEnvironmentError;
   if (known) {
     console.error(`${style.error(symbols.fail)} ${e.message}`);
+    if (e instanceof OutdatedSetupStampError) {
+      console.error('');
+      console.error('  To update the setup, run:');
+      console.error(`    ${style.ident('orc setup')}`);
+      console.error('');
+      console.error('  To check for problems, run:');
+      console.error(`    ${style.ident('orc doctor')}`);
+    }
   } else {
     console.error(e);
     console.error('');

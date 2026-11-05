@@ -93,10 +93,11 @@ export function renderText(
     artifactTextByName: Map<string, string>;
     artifactsDirPath: string;
     input: string;
+    baseBranch: string;
     reason?: string | undefined;
   },
 ): string {
-  const { input, reason, artifactsDirPath, artifactTextByName } = args;
+  const { input, baseBranch, reason, artifactsDirPath, artifactTextByName } = args;
 
   const { tokens } = tokenizeText(text);
   const parts: string[] = [];
@@ -105,6 +106,8 @@ export function renderText(
       parts.push(token.text);
     } else if (token.kind === 'input') {
       parts.push(input);
+    } else if (token.kind === 'base-branch') {
+      parts.push(baseBranch);
     } else if (token.kind === 'reason') {
       if (!reason) {
         throw new Error('No reason was provided. The text references $REASON.');

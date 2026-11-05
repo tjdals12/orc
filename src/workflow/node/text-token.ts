@@ -2,6 +2,7 @@ type TextToken =
   | { kind: 'text'; text: string }
   | { kind: 'artifacts-dir' }
   | { kind: 'input' }
+  | { kind: 'base-branch' }
   | { kind: 'artifact'; name: string }
   | { kind: 'reason' };
 
@@ -66,6 +67,14 @@ export function tokenizeText(text: string): {
     if (identifier === 'INPUT' && endsToken(text.charAt(identifierEnd))) {
       pushPlainText(cursor);
       tokens.push({ kind: 'input' });
+      cursor = identifierEnd;
+      plainStart = cursor;
+      continue;
+    }
+
+    if (identifier === 'BASE_BRANCH' && endsToken(text.charAt(identifierEnd))) {
+      pushPlainText(cursor);
+      tokens.push({ kind: 'base-branch' });
       cursor = identifierEnd;
       plainStart = cursor;
       continue;
