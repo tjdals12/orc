@@ -7,6 +7,7 @@ import { ApprovalNode } from './node/approval-node.js';
 import type { WorkflowNode } from './node/workflow-node.js';
 import type { AgentNodeFile, WorkflowNodeFile } from './node/schema.js';
 import type { WorkflowFile } from './schema.js';
+import { tokenizeText } from './node/text-token.js';
 
 type WorkflowInput = {
   required: boolean;
@@ -111,6 +112,46 @@ export class Workflow {
   requiresInput(): boolean {
     const requiresInput = this._input !== null && this._input.required === true;
     return requiresInput;
+  }
+
+  referencesBaseBranch(): boolean {
+    const texts: string[] = [];
+    const scripts: string[] = [];
+
+    for (const node of this._nodes) {
+      texts.push(node.readText());
+
+      if (node.type === 'bash') {
+        scripts.push(node.script);
+      }
+      if (node.type === 'agent' && node.loop !== null) {
+        const completion = node.loop.completion;
+        if (completion.kind === 'bash') {
+          texts.push(completion.script);
+          scripts.push(completion.script);
+        }
+      }
+      if (node.type === 'approval' && node.onReject !== null) {
+        const onReject = node.onReject;
+        if (onReject.type === 'agent') {
+          texts.push(onReject.prompt);
+        } else if (onReject.type === 'bash') {
+          texts.push(onReject.script);
+          scripts.push(onReject.script);
+        } else {
+          onReject satisfies never;
+        }
+      }
+    }
+
+    const referencesToken = texts.some((text) => {
+      const { tokens } = tokenizeText(text);
+      const referencesBaseBranch = tokens.some((token) => token.kind === 'base-branch');
+      return referencesBaseBranch;
+    });
+    const referencesShellVariable = scripts.some((script) => script.includes('${BASE_BRANCH}'));
+    const referencesBaseBranch = referencesToken || referencesShellVariable;
+    return referencesBaseBranch;
   }
 
   listNodeIds(): string[] {

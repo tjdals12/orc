@@ -207,6 +207,13 @@ nodes:
       pnpm lint
 ```
 
+Use `$BASE_BRANCH` in prompts and scripts to refer to the branch the run started from, for example when opening a pull request:
+
+```yaml
+prompt: |
+  Open a pull request targeting $BASE_BRANCH.
+```
+
 The full schema is documented in [the workflow schema](skills/orc/references/workflow-schema.md).
 
 ### Listing and validating

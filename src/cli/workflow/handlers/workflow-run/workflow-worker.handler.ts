@@ -63,6 +63,12 @@ export class WorkflowWorkerHandler {
 
     const executionEnvironment = await this.findExecutionEnvironmentOrThrow(workflowRun);
 
+    if (workflowRun.base_branch === null && workflow.referencesBaseBranch()) {
+      throw new WorkflowRunError(
+        'This workflow references $BASE_BRANCH, but no base branch was recorded for this run. Start a new run with a branch as its base.',
+      );
+    }
+
     const workflowRunNodes = await this._workflowRunNodeRepository.findManyByWorkflowRunId(
       workflowRun.id,
     );

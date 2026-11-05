@@ -207,13 +207,13 @@ nodes:
       Read `$ARTIFACTS_DIR/verify-report.md` for verification results
       and unresolved findings.
 
-      Review the whole branch's diff against the repository's default branch
+      Review the whole branch's diff against $BASE_BRANCH
       to understand the implementation.
 
       Resolve questions from these materials instead of asking the user.
 
-      Push the branch and open a pull request targeting the repository's
-      default branch, with a title summarizing the change and this body template:
+      Push the branch and open a pull request targeting $BASE_BRANCH,
+      with a title summarizing the change and this body template:
 
       ```
       ## Summary

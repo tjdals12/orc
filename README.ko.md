@@ -207,6 +207,13 @@ nodes:
       pnpm lint
 ```
 
+PR의 대상 브랜치처럼 워크플로우를 시작한 베이스 브랜치가 필요하면, 프롬프트나 스크립트에서 `$BASE_BRANCH`를 사용합니다.
+
+```yaml
+prompt: |
+  $BASE_BRANCH 브랜치를 대상으로 PR을 열어 주세요.
+```
+
 전체 스키마는 [워크플로우 스키마](skills/orc/references/workflow-schema.md)에 정리되어 있습니다.
 
 ### 확인하기

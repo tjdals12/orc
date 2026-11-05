@@ -6,7 +6,7 @@ description: "Runs and writes orc workflows. Use when the user wants work done b
   fixed. Not for doing the work directly: this skill delegates to the orc CLI."
 compatibility: Requires the orc CLI.
 metadata:
-  version: '5'
+  version: '6'
 ---
 
 Each workflow is a file at `.orc/workflows/<id>.yml`. Every run executes in its
@@ -85,6 +85,7 @@ own git worktree. Run `orc` from the project root.
        "project_id": "1c8d4e02-7a55-4f19-8b3d-6e0a91c74b22",
        "workflow_id": "plan",
        "input": "Add dark mode to the settings page",
+       "base_branch": "main",
        "execution_environment_id": "b41a7d63-92e8-4c07-a5f1-2d8b6e30c915",
        "status": "pending",
        "pid": null,
@@ -166,8 +167,8 @@ own git worktree. Run `orc` from the project root.
 Add `--json` to any command above except `cancel` and `prune`. `stop` returns
 after the run becomes `stopping`; follow it until `stopped` or `stop_failed`.
 `resume` prints the same document as `run`; `approve` and `reject` print the
-decision. A resumed run keeps its original input and re-runs only what did not
-finish.
+decision. A resumed run keeps its original input and base branch and re-runs
+only what did not finish.
 
 Use `stop` only when the user wants to continue the same run later. In a Git
 repository, it resets tracked files to `HEAD` and deletes ordinary untracked

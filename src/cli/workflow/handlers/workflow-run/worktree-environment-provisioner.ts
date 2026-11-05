@@ -1,6 +1,7 @@
 import type { Kysely } from 'kysely';
 
 import { buildWorktreePath } from '#shared/path.js';
+import { buildGitFailureDetail, resolveBranchName } from '#shared/git.js';
 
 import type { Database } from '#database/schema.js';
 import type { Project } from '#project/repository.js';
@@ -10,6 +11,7 @@ import {
   type ExecutionEnvironment,
 } from '#execution-environment/repository.js';
 import { provisionWorktree, type WorktreeProvisionStep } from '#execution-environment/worktree.js';
+import { ExecutionEnvironmentError } from '#execution-environment/error.js';
 import { WorkflowRunRepository, type WorkflowRun } from '#workflow-run/repository.js';
 
 export type WorktreeEnvironmentInfo = {
@@ -64,6 +66,14 @@ export class WorktreeEnvironmentProvisioner {
     const { id: workflowRunId, workflow_id: workflowId } = workflowRun;
 
     const base = this._base ?? 'HEAD';
+    let baseBranch: string | null;
+    try {
+      baseBranch = await resolveBranchName({ repoPath: projectPath, base });
+    } catch (e) {
+      throw new ExecutionEnvironmentError(
+        `Failed to resolve the base branch from "${base}". ${buildGitFailureDetail(e)}`,
+      );
+    }
     const branchPrefix = this._branch ?? `orc/${workflowId}`;
     const branch = `${branchPrefix}-${workflowRunId.slice(0, 8)}`;
     const worktreePath = buildWorktreePath({
@@ -87,6 +97,7 @@ export class WorktreeEnvironmentProvisioner {
         },
         {
           execution_environment_id: executionEnvironment.id,
+          base_branch: baseBranch,
         },
         {
           transaction,

@@ -29,6 +29,7 @@ export type WorkflowRunsTable = {
   project_id: string;
   workflow_id: string;
   input: string | null;
+  base_branch: string | null;
   execution_environment_id: string | null;
   status: WorkflowRunStatus;
   pid: number | null;
