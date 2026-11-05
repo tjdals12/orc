@@ -135,8 +135,8 @@ nodes:
       `$ARTIFACTS_DIR/fix-report.md`.
 
       Commit and push the changes, then open a pull request targeting
-      the repository's default branch. Use the reports and the branch's diff
-      against the default branch to describe the reported symptom, root cause,
+      $BASE_BRANCH. Use the reports and the branch's diff
+      against $BASE_BRANCH to describe the reported symptom, root cause,
       fix, and test results.
 
       Write the pull request URL to `$ARTIFACTS_DIR/pr-url.txt`.
